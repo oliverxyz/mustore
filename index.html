@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MuStore - Магазин музыкальных инструментов</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Шапка сайта -->
+    <header>
+        <div class="header-top">
+            <div class="container">
+                <div class="contact-info">
+                    <span><i class="fas fa-phone"></i> +7 (831) 425-67-89</span>
+                    <span><i class="fas fa-map-marker-alt"></i> Нижний Новгород, ул. Большая Покровская, 45</span>
+                </div>
+                <div class="user-actions">
+                    <a href="#" id="loginBtn"><i class="fas fa-user"></i> <span id="userDisplay">Войти</span></a>
+                    <a href="#" id="favoritesBtn"><i class="fas fa-heart"></i> Избранное (<span id="favoritesCount">0</span>)</a>
+                    <a href="#" id="ordersBtn" style="display: none;"><i class="fas fa-box"></i> Мои заказы</a>
+                    <a href="#" id="adminBtn" style="display: none;"><i class="fas fa-cog"></i> Админ панель</a>
+                    <a href="#" id="logoutBtn" style="display: none;"><i class="fas fa-sign-out-alt"></i> Выйти</a>
+                </div>
+            </div>
+        </div>
+        <div class="main-header">
+            <div class="container">
+                <a href="#" class="logo" data-link="home">
+                    <i class="fas fa-music"></i>
+                    MuStore
+                </a>
+                <form class="search-form" id="searchForm">
+                    <div class="search-wrapper">
+                        <input type="text" class="search-input" placeholder="Поиск по каталогу..." id="searchInput">
+                        <button type="submit" class="search-button">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </form>
+                <div class="cart-widget">
+                    <button class="cart-button" id="cartBtn">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span class="cart-count" id="cartCount">0</span>
+                    </button>
+                    <div class="cart-total" id="cartTotal">0 ₽</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Навигация -->
+    <nav>
+        <div class="container">
+            <ul class="nav-menu">
+                <li>
+                    <a href="#" data-link="category/guitars">Гитары</a>
+                    <div class="dropdown">
+                        <a href="#" data-link="category/guitars/acoustic">Акустические гитары</a>
+                        <a href="#" data-link="category/guitars/electric">Электрогитары</a>
+                        <a href="#" data-link="category/guitars/bass">Бас-гитары</a>
+                        <a href="#" data-link="category/guitars/classical">Классические гитары</a>
+                    </div>
+                </li>
+                <li>
+                    <a href="#" data-link="category/keyboards">Клавишные</a>
+                    <div class="dropdown">
+                        <a href="#" data-link="category/keyboards/synthesizers">Синтезаторы</a>
+                        <a href="#" data-link="category/keyboards/pianos">Цифровые пианино</a>
+                        <a href="#" data-link="category/keyboards/midi">MIDI-клавиатуры</a>
+                    </div>
+                </li>
+                <li>
+                    <a href="#" data-link="category/drums">Ударные</a>
+                    <div class="dropdown">
+                        <a href="#" data-link="category/drums/acoustic-drums">Акустические ударные</a>
+                        <a href="#" data-link="category/drums/electronic-drums">Электронные ударные</a>
+                        <a href="#" data-link="category/drums/percussion">Перкуссия</a>
+                    </div>
+                </li>
+                <li>
+                    <a href="#" data-link="category/wind">Духовые</a>
+                </li>
+                <li>
+                    <a href="#" data-link="category/studio">Студийное оборудование</a>
+                </li>
+                <li>
+                    <a href="#" data-link="category/accessories">Аксессуары</a>
+                </li>
+                <li>
+                    <a href="#" data-link="sale" class="sale-link">Распродажа</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Основной контент -->
+    <main>
+        <div class="container">
+            <!-- Хлебные крошки -->
+            <div class="breadcrumb" id="breadcrumb">
+                <a href="#" data-link="home">Главная</a>
+            </div>
+
+            <!-- Динамический контент загружается здесь -->
+            <div id="app-content">
+                <!-- Контент будет загружаться динамически через JavaScript -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Футер -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>О магазине</h3>
+                    <ul>
+                        <li><a href="#" data-link="about">О нас</a></li>
+                        <li><a href="#" data-link="advantages">Наши преимущества</a></li>
+                        <li><a href="#" data-link="reviews">Отзывы клиентов</a></li>
+                        <li><a href="#" data-link="careers">Вакансии</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h3>Покупателям</h3>
+                    <ul>
+                        <li><a href="#" data-link="delivery">Доставка и оплата</a></li>
+                        <li><a href="#" data-link="returns">Возврат и обмен</a></li>
+                        <li><a href="#" data-link="warranty">Гарантия</a></li>
+                        <li><a href="#" data-link="service">Сервисный центр</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h3>Контакты</h3>
+                    <ul>
+                        <li><i class="fas fa-phone"></i> +7 (831) 425-67-89</li>
+                        <li><i class="fas fa-envelope"></i> info@mustore.ru</li>
+                        <li><i class="fas fa-clock"></i> Пн-Пт: 10:00-20:00</li>
+                        <li><i class="fas fa-clock"></i> Сб-Вс: 10:00-18:00</li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h3>Мы в соцсетях</h3>
+                    <div class="social-links">
+                        <a href="#" target="_blank"><i class="fab fa-vk"></i> ВКонтакте</a>
+                        <a href="#" target="_blank"><i class="fab fa-telegram"></i> Telegram</a>
+                        <a href="#" target="_blank"><i class="fab fa-youtube"></i> YouTube</a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 MuStore. Все права защищены.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Модальное окно корзины -->
+    <div class="modal" id="cartModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Корзина</h2>
+                <button class="modal-close" onclick="App.closeModal('cartModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="cart-items" id="cartItems">
+                    <!-- Товары корзины будут загружены динамически -->
+                </div>
+                <div class="cart-summary" id="cartSummary" style="display: none;">
+                    <div class="summary-row">
+                        <span>Товаров:</span>
+                        <span id="cartItemsCount">0</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Доставка:</span>
+                        <span>Бесплатно</span>
+                    </div>
+                    <div class="summary-row total">
+                        <span>Итого:</span>
+                        <span id="cartTotalModal">0 ₽</span>
+                    </div>
+                    <button class="btn btn-primary" style="width: 100%; margin-top: 20px;" onclick="App.Router.navigate('checkout')">
+                        Оформить заказ
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно товара -->
+    <div class="modal" id="productModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 class="modal-title" id="productModalTitle">Название товара</h2>
+                <button class="modal-close" onclick="App.closeModal('productModal')">&times;</button>
+            </div>
+            <div class="modal-body" id="productModalContent">
+                <!-- Содержимое будет загружено динамически -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно авторизации -->
+    <div class="modal" id="authModal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2 class="modal-title">Вход в аккаунт</h2>
+                <button class="modal-close" onclick="App.closeModal('authModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="auth-tabs">
+                    <button class="auth-tab active" onclick="App.Auth.switchTab('login')">Вход</button>
+                    <button class="auth-tab" onclick="App.Auth.switchTab('register')">Регистрация</button>
+                </div>
+                
+                <!-- Форма входа -->
+                <form id="loginForm" class="auth-form active">
+                    <div class="form-group">
+                        <label for="loginEmail">Email</label>
+                        <input type="email" id="loginEmail" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Пароль</label>
+                        <input type="password" id="loginPassword" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="rememberMe">
+                            Запомнить меня
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">Войти</button>
+                    
+                    <!-- Демо-пользователи для тестирования -->
+                    <div class="demo-users">
+                        <p>Тестовые аккаунты:</p>
+                        <button type="button" class="demo-btn" onclick="App.Auth.fillDemo('user')">
+                            <i class="fas fa-user"></i> Пользователь
+                        </button>
+                        <button type="button" class="demo-btn" onclick="App.Auth.fillDemo('admin')">
+                            <i class="fas fa-user-shield"></i> Администратор
+                        </button>
+                    </div>
+                </form>
+                
+                <!-- Форма регистрации -->
+                <form id="registerForm" class="auth-form">
+                    <div class="form-group">
+                        <label for="registerName">Имя</label>
+                        <input type="text" id="registerName" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerEmail">Email</label>
+                        <input type="email" id="registerEmail" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPassword">Пароль</label>
+                        <input type="password" id="registerPassword" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPasswordConfirm">Подтвердите пароль</label>
+                        <input type="password" id="registerPasswordConfirm" class="form-control" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">Зарегистрироваться</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно избранного -->
+    <div class="modal" id="favoritesModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Избранные товары</h2>
+                <button class="modal-close" onclick="App.closeModal('favoritesModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="favoritesContent">
+                    <!-- Избранные товары будут загружены динамически -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Уведомления -->
+    <div class="notification" id="notification"></div>
+
+    <!-- Загрузчик -->
+    <div class="loader" id="loader">
+        <div class="loader-spinner"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
