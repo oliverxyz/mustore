@@ -1,13 +1,148 @@
+// ====================================
+// MuStore - Главный модуль приложения
+// ====================================
 
-// =============================================
-// Обновления для script.js для работы с реальным API
-// Замените соответствующие части в оригинальном script.js
-// =============================================
-
-// В начале файла подключаем API клиент
 const API = window.MuStoreAPI;
 
-// Обновляем модуль App.Auth
+const App = {
+    // Инициализация приложения
+    init() {
+        // Инициализируем подмодули
+        this.Router.init();
+        this.Auth.init();
+        this.Cart.init();
+        this.Favorites.init();
+        this.UI.init();
+        
+        // Загружаем начальную страницу
+        this.Router.handleRoute();
+    },
+
+    // Глобальное состояние приложения
+    state: {
+        currentUser: null,
+        cart: [],
+        favorites: [],
+        products: [],
+        categories: [],
+        filters: {
+            category: null,
+            subcategory: null,
+            brands: [],
+            priceMin: null,
+            priceMax: null,
+            search: ''
+        }
+    },
+
+    // Закрытие модального окна
+    closeModal(modalId) {
+        document.getElementById(modalId).style.display = 'none';
+    },
+
+    // Открытие модального окна
+    openModal(modalId) {
+        document.getElementById(modalId).style.display = 'flex';
+    }
+};
+
+// ====================================
+// Модуль маршрутизации (Router)
+// ====================================
+
+App.Router = {
+    routes: {
+        'home': () => App.Pages.showHome(),
+        'category/:category': (params) => App.Pages.showCategory(params.category),
+        'category/:category/:subcategory': (params) => App.Pages.showCategory(params.category, params.subcategory),
+        'product/:id': (params) => App.Pages.showProduct(params.id),
+        'search': () => App.Pages.showSearch(),
+        'cart': () => App.Pages.showCart(),
+        'checkout': () => App.Pages.showCheckout(),
+        'favorites': () => App.Pages.showFavorites(),
+        'orders': () => App.Pages.showOrders(),
+        'admin': () => App.Pages.showAdmin(),
+        'about': () => App.Pages.showInfo('about'),
+        'delivery': () => App.Pages.showInfo('delivery'),
+        'returns': () => App.Pages.showInfo('returns'),
+        'warranty': () => App.Pages.showInfo('warranty'),
+        'service': () => App.Pages.showInfo('service'),
+        'advantages': () => App.Pages.showInfo('advantages'),
+        'reviews': () => App.Pages.showInfo('reviews'),
+        'careers': () => App.Pages.showInfo('careers'),
+        'sale': () => App.Pages.showSale()
+    },
+
+    init() {
+        // Обработка кликов по ссылкам с data-link
+        document.addEventListener('click', (e) => {
+            const link = e.target.closest('[data-link]');
+            if (link) {
+                e.preventDefault();
+                const route = link.getAttribute('data-link');
+                this.navigate(route);
+            }
+        });
+
+        // Обработка изменения истории браузера
+        window.addEventListener('popstate', () => this.handleRoute());
+    },
+
+    navigate(route) {
+        window.history.pushState(null, null, `#${route}`);
+        this.handleRoute();
+    },
+
+    handleRoute() {
+        const hash = window.location.hash.slice(1) || 'home';
+        const [routePath, ...params] = hash.split('/');
+        
+        // Поиск подходящего маршрута
+        let routeFound = false;
+        for (const [pattern, handler] of Object.entries(this.routes)) {
+            const regex = this.createRouteRegex(pattern);
+            const match = hash.match(regex);
+            
+            if (match) {
+                const params = this.extractParams(pattern, hash);
+                handler(params);
+                routeFound = true;
+                break;
+            }
+        }
+        
+        if (!routeFound) {
+            this.navigate('home');
+        }
+    },
+
+    createRouteRegex(pattern) {
+        const regexPattern = pattern
+            .replace(/\//g, '\\/')
+            .replace(/:([^\/]+)/g, '([^\/]+)');
+        return new RegExp(`^${regexPattern}$`);
+    },
+
+    extractParams(pattern, path) {
+        const params = {};
+        const patternParts = pattern.split('/');
+        const pathParts = path.split('/');
+        
+        patternParts.forEach((part, index) => {
+            if (part.startsWith(':')) {
+                const paramName = part.slice(1);
+                params[paramName] = pathParts[index];
+            }
+        });
+        
+        return params;
+    }
+};
+
+// ====================================
+// Модуль аутентификации
+// ====================================
+
 App.Auth = {
     init() {
         // Проверяем сохраненный токен
@@ -153,12 +288,61 @@ App.Auth = {
     },
 
     // Остальные методы остаются без изменений
-    updateUIForUser() { /* ... */ },
-    switchTab(tab) { /* ... */ },
-    fillDemo(type) { /* ... */ }
+    updateUIForUser() {
+        const loginBtn = document.getElementById('loginBtn');
+        const userDisplay = document.getElementById('userDisplay');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const ordersBtn = document.getElementById('ordersBtn');
+        const adminBtn = document.getElementById('adminBtn');
+
+        if (App.state.currentUser) {
+            userDisplay.textContent = App.state.currentUser.name;
+            logoutBtn.style.display = 'inline-flex';
+            ordersBtn.style.display = 'inline-flex';
+            
+            if (App.state.currentUser.role === 'admin') {
+                adminBtn.style.display = 'inline-flex';
+            } else {
+                adminBtn.style.display = 'none';
+            }
+        } else {
+            userDisplay.textContent = 'Войти';
+            logoutBtn.style.display = 'none';
+            ordersBtn.style.display = 'none';
+            adminBtn.style.display = 'none';
+        }
+    },
+
+    switchTab(tab) {
+        const tabs = document.querySelectorAll('.auth-tab');
+        const forms = document.querySelectorAll('.auth-form');
+
+        tabs.forEach(t => t.classList.remove('active'));
+        forms.forEach(f => f.classList.remove('active'));
+
+        if (tab === 'login') {
+            tabs[0].classList.add('active');
+            document.getElementById('loginForm').classList.add('active');
+        } else {
+            tabs[1].classList.add('active');
+            document.getElementById('registerForm').classList.add('active');
+        }
+    },
+    fillDemo(type) {
+        if (type === 'user') {
+            document.getElementById('loginEmail').value = 'user@example.com';
+            document.getElementById('loginPassword').value = 'password123';
+        } else if (type === 'admin') {
+            document.getElementById('loginEmail').value = 'admin@mustore.ru';
+            document.getElementById('loginPassword').value = 'admin123';
+        }
+    }
 };
 
-// Обновляем модуль App.Cart
+// ====================================
+// Модуль корзины
+// ====================================
+
 App.Cart = {
     async init() {
         await this.loadCart();
@@ -275,7 +459,10 @@ App.Cart = {
     }
 };
 
-// Обновляем модуль App.Favorites
+// ====================================
+// Модуль избранного
+// ====================================
+
 App.Favorites = {
     async init() {
         if (App.state.currentUser) {
@@ -338,7 +525,387 @@ App.Favorites = {
     }
 };
 
-// Обновляем методы в App.Pages для работы с API
+// ====================================
+// Модуль пользовательского интерфейса
+// ====================================
+
+App.UI = {
+    init() {
+        // Обработчик поиска
+        document.getElementById('searchForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const searchQuery = document.getElementById('searchInput').value.trim();
+            if (searchQuery) {
+                App.state.filters.search = searchQuery;
+                App.Router.navigate('search');
+            }
+        });
+
+        // Закрытие модальных окон при клике вне них
+        window.addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal')) {
+                e.target.style.display = 'none';
+            }
+        });
+    },
+
+    showNotification(message, type = 'success') {
+        const notification = document.getElementById('notification');
+        notification.textContent = message;
+        notification.className = `notification ${type}`;
+        notification.style.display = 'block';
+        
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 3000);
+    },
+
+    showLoader() {
+        document.getElementById('loader').style.display = 'block';
+    },
+
+    hideLoader() {
+        document.getElementById('loader').style.display = 'none';
+    },
+
+    formatPrice(price) {
+        return new Intl.NumberFormat('ru-RU', {
+            style: 'currency',
+            currency: 'RUB',
+            minimumFractionDigits: 0
+        }).format(price);
+    },
+
+    updateBreadcrumb(items) {
+        const breadcrumb = document.getElementById('breadcrumb');
+        breadcrumb.innerHTML = items.map((item, index) => {
+            if (index === items.length - 1) {
+                return `<span>${item.text}</span>`;
+            }
+            return `<a href="#" data-link="${item.link}">${item.text}</a> <span>/</span>`;
+        }).join(' ');
+    }
+};
+
+// ====================================
+// Модуль данных (имитация API)
+// ====================================
+
+App.Data = {
+    // Категории товаров
+    categories: {
+        'guitars': {
+            name: 'Гитары',
+            icon: '🎸',
+            subcategories: {
+                'acoustic': 'Акустические гитары',
+                'electric': 'Электрогитары',
+                'bass': 'Бас-гитары',
+                'classical': 'Классические гитары'
+            }
+        },
+        'keyboards': {
+            name: 'Клавишные',
+            icon: '🎹',
+            subcategories: {
+                'synthesizers': 'Синтезаторы',
+                'pianos': 'Цифровые пианино',
+                'midi': 'MIDI-клавиатуры'
+            }
+        },
+        'drums': {
+            name: 'Ударные',
+            icon: '🥁',
+            subcategories: {
+                'acoustic-drums': 'Акустические ударные',
+                'electronic-drums': 'Электронные ударные',
+                'percussion': 'Перкуссия'
+            }
+        },
+        'wind': {
+            name: 'Духовые',
+            icon: '🎺',
+            subcategories: {}
+        },
+        'studio': {
+            name: 'Студийное оборудование',
+            icon: '🎙️',
+            subcategories: {}
+        },
+        'accessories': {
+            name: 'Аксессуары',
+            icon: '🎵',
+            subcategories: {}
+        }
+    },
+
+    // Продукты (расширенный список)
+    products: [
+        {
+            id: '1',
+            name: 'Yamaha F310',
+            brand: 'Yamaha',
+            category: 'guitars',
+            subcategory: 'acoustic',
+            price: 15990,
+            oldPrice: 18990,
+            image: 'https://images.unsplash.com/photo-1558098329-a11cff621064?w=400',
+            description: 'Классическая акустическая гитара для начинающих и опытных музыкантов.',
+            specifications: {
+                'Тип': 'Дредноут',
+                'Верхняя дека': 'Ель',
+                'Задняя дека и обечайки': 'Меранти',
+                'Гриф': 'Нато',
+                'Накладка грифа': 'Палисандр',
+                'Количество ладов': '20',
+                'Мензура': '634 мм'
+            },
+            featured: true,
+            isNew: false,
+            inStock: true
+        },
+        {
+            id: '2',
+            name: 'Fender Stratocaster Player',
+            brand: 'Fender',
+            category: 'guitars',
+            subcategory: 'electric',
+            price: 89990,
+            oldPrice: null,
+            image: 'https://images.unsplash.com/photo-1564186763535-ebb21ef5277f?w=400',
+            description: 'Легендарная электрогитара с классическим звучанием Fender.',
+            specifications: {
+                'Корпус': 'Ольха',
+                'Гриф': 'Клён',
+                'Накладка грифа': 'Клён',
+                'Количество ладов': '22',
+                'Звукосниматели': '3x Player Series Alnico 5 Strat Single-Coil',
+                'Бридж': 'Tremolo 2-точечный',
+                'Цвет': 'Sonic Red'
+            },
+            featured: true,
+            isNew: true,
+            inStock: true
+        },
+        {
+            id: '3',
+            name: 'Roland FP-30X',
+            brand: 'Roland',
+            category: 'keyboards',
+            subcategory: 'pianos',
+            price: 64990,
+            oldPrice: 69990,
+            image: 'https://images.unsplash.com/photo-1520523839897-bd0b52f945a0?w=400',
+            description: 'Портативное цифровое пианино с аутентичным звучанием и клавиатурой.',
+            specifications: {
+                'Клавиатура': '88 клавиш, PHA-4 Standard',
+                'Полифония': '256 голосов',
+                'Тембры': '56 тембров',
+                'Эффекты': 'Ambience, Brilliance',
+                'Записывающее устройство': 'SMF',
+                'Bluetooth': 'Да (MIDI, Audio)',
+                'Выходы': 'Наушники, линейный выход'
+            },
+            featured: true,
+            isNew: false,
+            inStock: true
+        },
+        {
+            id: '4',
+            name: 'Pearl Export Series',
+            brand: 'Pearl',
+            category: 'drums',
+            subcategory: 'acoustic-drums',
+            price: 119990,
+            oldPrice: null,
+            image: 'https://images.unsplash.com/photo-1519892300165-cb5542fb47c7?w=400',
+            description: 'Профессиональная барабанная установка для сцены и студии.',
+            specifications: {
+                'Бас-барабан': '22"x18"',
+                'Том-томы': '10"x7", 12"x8"',
+                'Напольный том': '16"x16"',
+                'Малый барабан': '14"x5.5"',
+                'Материал': 'Тополь/Красное дерево',
+                'Фурнитура': 'Хром',
+                'Цвет': 'Jet Black'
+            },
+            featured: true,
+            isNew: true,
+            inStock: true
+        },
+        {
+            id: '5',
+            name: 'Shure SM58',
+            brand: 'Shure',
+            category: 'studio',
+            price: 8990,
+            oldPrice: null,
+            image: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=400',
+            description: 'Легендарный вокальный микрофон для сцены и студии.',
+            specifications: {
+                'Тип': 'Динамический',
+                'Диаграмма направленности': 'Кардиоида',
+                'Частотный диапазон': '50 - 15000 Гц',
+                'Чувствительность': '-54.5 дБВ/Па',
+                'Импеданс': '150 Ом',
+                'Разъем': 'XLR'
+            },
+            featured: false,
+            isNew: false,
+            inStock: true
+        },
+        {
+            id: '6',
+            name: 'Gibson Les Paul Standard',
+            brand: 'Gibson',
+            category: 'guitars',
+            subcategory: 'electric',
+            price: 249990,
+            oldPrice: null,
+            image: 'https://images.unsplash.com/photo-1550985616-10810253b84d?w=400',
+            description: 'Классическая электрогитара с мощным звучанием хамбакеров.',
+            specifications: {
+                'Корпус': 'Красное дерево',
+                'Топ': 'Клён AA',
+                'Гриф': 'Красное дерево',
+                'Накладка грифа': 'Палисандр',
+                'Звукосниматели': 'Burstbucker Pro',
+                'Бридж': 'Tune-o-matic',
+                'Цвет': 'Bourbon Burst'
+            },
+            featured: true,
+            isNew: false,
+            inStock: true
+        },
+        {
+            id: '7',
+            name: 'Yamaha YAS-280',
+            brand: 'Yamaha',
+            category: 'wind',
+            price: 89990,
+            oldPrice: 94990,
+            image: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=400',
+            description: 'Альт-саксофон для учащихся и любителей.',
+            specifications: {
+                'Строй': 'Eb',
+                'Корпус': 'Латунь',
+                'Покрытие': 'Золотой лак',
+                'Клапаны': 'Улучшенная механика',
+                'Мундштук': 'AS-4C',
+                'Кейс': 'В комплекте'
+            },
+            featured: false,
+            isNew: false,
+            inStock: true
+        },
+        {
+            id: '8',
+            name: 'Korg Kronos 2',
+            brand: 'Korg',
+            category: 'keyboards',
+            subcategory: 'synthesizers',
+            price: 299990,
+            oldPrice: null,
+            image: 'https://images.unsplash.com/photo-1563330232-57114bb0823c?w=400',
+            description: 'Профессиональная музыкальная рабочая станция.',
+            specifications: {
+                'Клавиатура': '88 клавиш, RH3',
+                'Движки синтеза': '9 типов',
+                'Полифония': 'До 400 голосов',
+                'Память': '62 ГБ SSD',
+                'Секвенсер': '16 треков MIDI + 16 аудио',
+                'Дисплей': '8" TouchView'
+            },
+            featured: true,
+            isNew: true,
+            inStock: false
+        }
+    ],
+
+    // Получение товаров с фильтрацией
+    async getProducts(filters = {}) {
+        // Имитация задержки API
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        let filtered = [...this.products];
+        
+        // Фильтр по категории
+        if (filters.category) {
+            filtered = filtered.filter(p => p.category === filters.category);
+        }
+        
+        // Фильтр по подкатегории
+        if (filters.subcategory) {
+            filtered = filtered.filter(p => p.subcategory === filters.subcategory);
+        }
+        
+        // Фильтр по бренду
+        if (filters.brands && filters.brands.length > 0) {
+            filtered = filtered.filter(p => filters.brands.includes(p.brand));
+        }
+        
+        // Фильтр по цене
+        if (filters.priceMin) {
+            filtered = filtered.filter(p => p.price >= filters.priceMin);
+        }
+        if (filters.priceMax) {
+            filtered = filtered.filter(p => p.price <= filters.priceMax);
+        }
+        
+        // Фильтр по наличию
+        if (filters.inStock) {
+            filtered = filtered.filter(p => p.inStock);
+        }
+        
+        // Фильтр по рекомендуемым
+        if (filters.featured) {
+            filtered = filtered.filter(p => p.featured);
+        }
+        
+        // Фильтр по новинкам
+        if (filters.isNew) {
+            filtered = filtered.filter(p => p.isNew);
+        }
+        
+        // Фильтр по скидкам
+        if (filters.sale) {
+            filtered = filtered.filter(p => p.oldPrice !== null);
+        }
+        
+        // Поиск
+        if (filters.search) {
+            const search = filters.search.toLowerCase();
+            filtered = filtered.filter(p => 
+                p.name.toLowerCase().includes(search) ||
+                p.brand.toLowerCase().includes(search) ||
+                p.description.toLowerCase().includes(search)
+            );
+        }
+        
+        return filtered;
+    },
+
+    // Получение товара по ID
+    async getProduct(id) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        return this.products.find(p => p.id === id);
+    },
+
+    // Получение уникальных брендов
+    getBrands(category = null) {
+        let products = this.products;
+        if (category) {
+            products = products.filter(p => p.category === category);
+        }
+        const brands = [...new Set(products.map(p => p.brand))];
+        return brands.sort();
+    }
+};
+
+// ====================================
+// Модуль страниц
+// ====================================
+
 App.Pages = {
     async showHome() {
         App.UI.updateBreadcrumb([
@@ -656,7 +1223,10 @@ App.Pages = {
     }
 };
 
-// Обновляем инициализацию приложения
+// ====================================
+// Инициализация приложения при загрузке
+// ====================================
+
 document.addEventListener('DOMContentLoaded', () => {
     // Инициализируем приложение
     App.init();
