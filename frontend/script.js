@@ -1175,18 +1175,6 @@ App.Pages = {
                         <button class="btn btn-primary" onclick="App.Router.navigate('home')">
                             Перейти к покупкам
                         </button>
-                        
-                        <!-- Отладочная информация -->
-                        <div style="margin-top: 40px; padding: 20px; background: #f5f5f5; border-radius: 8px;">
-                            <h3>Отладочная информация:</h3>
-                            <p>Пользователь: ${App.state.currentUser.email}</p>
-                            <p>ID пользователя: ${App.state.currentUser.id}</p>
-                            <p>Токен есть: ${localStorage.getItem('authToken') ? 'Да' : 'Нет'}</p>
-                            <button class="btn btn-secondary" onclick="App.Pages.testOrdersAPI()">
-                                Тестировать API заказов
-                            </button>
-                        </div>
-                    </div>
                 `;
                 return;
             }

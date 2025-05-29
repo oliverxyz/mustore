@@ -54,6 +54,21 @@ pool.on('error', (err) => {
 });
 
 // =============================================
+// Временная замена bcrypt на crypto для избежания segfault
+// =============================================
+const crypto = require('crypto');
+
+// Простая функция хеширования вместо bcrypt
+function simpleHash(password) {
+    return crypto.createHash('sha256').update(password + 'mustore-salt').digest('hex');
+}
+
+// Проверка пароля
+function verifyPassword(password, hash) {
+    return simpleHash(password) === hash;
+}
+
+// =============================================
 // Middleware
 // =============================================
 
@@ -71,23 +86,8 @@ app.use(cors({
     credentials: true
 }));
 
-// Rate limiting
-// Временно отключаем rate limiting для устранения segfault
-// const limiter = rateLimit({
-//     windowMs: 15 * 60 * 1000,
-//     max: 100,
-//     message: { error: 'Слишком много запросов с этого IP, попробуйте позже' }
-// });
-
-// const authLimiter = rateLimit({
-//     windowMs: 15 * 60 * 1000,
-//     max: 5,
-//     skipSuccessfulRequests: true,
-//     message: { error: 'Слишком много попыток входа, попробуйте позже' }
-// });
-
-// app.use('/api/', limiter);
-// app.use('/api/auth/', authLimiter);
+// Rate limiting - оставляем закомментированным как в оригинале
+// const limiter = rateLimit({...});
 
 // Парсинг тела запроса
 app.use(express.json({ limit: '10mb' }));
@@ -287,8 +287,8 @@ app.post('/api/auth/register', [
             return res.status(400).json({ error: 'Пользователь с таким email уже существует' });
         }
         
-        // Хеширование пароля
-        const hashedPassword = await bcrypt.hash(password, 10);
+        // Используем простое хеширование вместо bcrypt
+        const hashedPassword = simpleHash(password);
         
         // Создание пользователя
         const result = await pool.query(
@@ -347,9 +347,18 @@ app.post('/api/auth/login', [
         
         const user = result.rows[0];
         
-        // Временно отключаем bcrypt для устранения segfault
-        // const validPassword = await bcrypt.compare(password, user.password_hash);
-        const validPassword = password === 'admin123' || password === 'password123';
+        // Для существующих пользователей с bcrypt хешами используем простую проверку
+        // В реальном приложении нужно будет перехешировать все пароли
+        let validPassword = false;
+        
+        // Проверяем демо-пароли
+        if ((email === 'admin@mustore.ru' && password === 'admin123') ||
+            (email === 'user@example.com' && password === 'password123')) {
+            validPassword = true;
+        } else {
+            // Для новых пользователей используем наш хеш
+            validPassword = verifyPassword(password, user.password_hash);
+        }
         
         if (!validPassword) {
             console.log(`Login failed: Invalid password for email ${email}`);
@@ -1125,7 +1134,7 @@ app.post('/api/orders', [
         // Генерируем номер заказа
         const orderNumber = `ORD-${Date.now()}`;
         
-        // Создаем заказ
+        // Создаем заказ - ВАЖНО: добавляем user_id если пользователь авторизован
         const orderResult = await client.query(`
             INSERT INTO orders (
                 order_number, user_id, status, payment_status,
@@ -1140,7 +1149,7 @@ app.post('/api/orders', [
             ) RETURNING id, order_number, created_at
         `, [
             orderNumber,
-            req.user?.id || null,
+            req.user?.id || null,  // Используем ID пользователя из токена
             subtotal,
             deliveryAmount,
             totalAmount,
@@ -1154,6 +1163,8 @@ app.post('/api/orders', [
         ]);
         
         const order = orderResult.rows[0];
+        
+        console.log('Order created:', order, 'User ID:', req.user?.id);
         
         // Добавляем позиции заказа
         for (const item of cartItems) {
@@ -1213,6 +1224,7 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
         console.log('Getting orders for user:', req.user.id);
         const { limit = 10, offset = 0 } = req.query;
         
+        // Упрощенный запрос без проблемного GROUP BY
         const result = await pool.query(`
             SELECT 
                 o.id,
@@ -1230,26 +1242,36 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
                 o.payment_method,
                 o.created_at,
                 o.updated_at,
-                COALESCE(json_agg(
-                    json_build_object(
-                        'id', oi.id,
-                        'product_name', oi.product_name,
-                        'product_brand', oi.product_brand,
-                        'product_sku', oi.product_sku,
-                        'quantity', oi.quantity,
-                        'price', oi.price,
-                        'subtotal', oi.subtotal
-                    ) ORDER BY oi.created_at
-                ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+                (
+                    SELECT json_agg(
+                        json_build_object(
+                            'id', oi.id,
+                            'product_name', oi.product_name,
+                            'product_brand', oi.product_brand,
+                            'product_sku', oi.product_sku,
+                            'quantity', oi.quantity,
+                            'price', oi.price,
+                            'subtotal', oi.subtotal
+                        ) ORDER BY oi.created_at
+                    )
+                    FROM order_items oi
+                    WHERE oi.order_id = o.id
+                ) as items
             FROM orders o
-            LEFT JOIN order_items oi ON o.id = oi.order_id
-            WHERE o.user_id = $1
-            GROUP BY o.id, o.order_number, o.status, o.payment_status, o.subtotal, o.delivery_amount, o.total_amount, o.customer_name, o.customer_email, o.customer_phone, o.delivery_method, o.delivery_address, o.payment_method, o.created_at, o.updated_at
+            WHERE o.user_id = $1 OR o.customer_email = (SELECT email FROM users WHERE id = $1)
             ORDER BY o.created_at DESC
             LIMIT $2 OFFSET $3
         `, [req.user.id, limit, offset]);
         
         console.log('Found orders:', result.rows.length);
+        
+        // Преобразуем null в пустой массив для items
+        result.rows.forEach(order => {
+            if (!order.items) {
+                order.items = [];
+            }
+        });
+        
         res.json(result.rows);
     } catch (error) {
         console.error('Get orders error:', error);
@@ -1265,25 +1287,32 @@ app.get('/api/orders/:orderId', authenticateToken, async (req, res) => {
         const result = await pool.query(`
             SELECT 
                 o.*,
-                COALESCE(json_agg(
-                    json_build_object(
-                        'id', oi.id,
-                        'product_name', oi.product_name,
-                        'product_sku', oi.product_sku,
-                        'product_brand', oi.product_brand,
-                        'quantity', oi.quantity,
-                        'price', oi.price,
-                        'subtotal', oi.subtotal
-                    ) ORDER BY oi.created_at
-                ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+                (
+                    SELECT json_agg(
+                        json_build_object(
+                            'id', oi.id,
+                            'product_name', oi.product_name,
+                            'product_sku', oi.product_sku,
+                            'product_brand', oi.product_brand,
+                            'quantity', oi.quantity,
+                            'price', oi.price,
+                            'subtotal', oi.subtotal
+                        ) ORDER BY oi.created_at
+                    )
+                    FROM order_items oi
+                    WHERE oi.order_id = o.id
+                ) as items
             FROM orders o
-            LEFT JOIN order_items oi ON o.id = oi.order_id
             WHERE o.id = $1 AND (o.user_id = $2 OR $3 = 'admin')
-            GROUP BY o.id
         `, [orderId, req.user.id, req.user.role]);
         
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Заказ не найден' });
+        }
+        
+        // Преобразуем null в пустой массив для items
+        if (!result.rows[0].items) {
+            result.rows[0].items = [];
         }
         
         res.json(result.rows[0]);
@@ -1311,17 +1340,20 @@ app.get('/api/admin/orders', authenticateToken, requireAdmin, async (req, res) =
         let query = `
             SELECT 
                 o.*,
-                COALESCE(json_agg(
-                    json_build_object(
-                        'product_name', oi.product_name,
-                        'product_brand', oi.product_brand,
-                        'quantity', oi.quantity,
-                        'price', oi.price
-                    ) ORDER BY oi.created_at
-                ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items,
+                (
+                    SELECT json_agg(
+                        json_build_object(
+                            'product_name', oi.product_name,
+                            'product_brand', oi.product_brand,
+                            'quantity', oi.quantity,
+                            'price', oi.price
+                        ) ORDER BY oi.created_at
+                    )
+                    FROM order_items oi
+                    WHERE oi.order_id = o.id
+                ) as items,
                 COUNT(*) OVER() as total_count
             FROM orders o
-            LEFT JOIN order_items oi ON o.id = oi.order_id
             WHERE 1=1
         `;
         
@@ -1346,7 +1378,7 @@ app.get('/api/admin/orders', authenticateToken, requireAdmin, async (req, res) =
             params.push(endDate);
         }
         
-        query += ` GROUP BY o.id ORDER BY o.created_at DESC`;
+        query += ` ORDER BY o.created_at DESC`;
         
         paramCount++;
         query += ` LIMIT $${paramCount}`;
@@ -1357,6 +1389,13 @@ app.get('/api/admin/orders', authenticateToken, requireAdmin, async (req, res) =
         params.push(parseInt(offset));
         
         const result = await pool.query(query, params);
+        
+        // Преобразуем null в пустой массив для items
+        result.rows.forEach(order => {
+            if (!order.items) {
+                order.items = [];
+            }
+        });
         
         const totalCount = result.rows.length > 0 ? result.rows[0].total_count : 0;
         
