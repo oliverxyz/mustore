@@ -16,602 +16,485 @@ const pool = new Pool({
     password: process.env.DB_PASSWORD || 'password',
 });
 
-// Тестовые данные
-const testProducts = [
-    // Гитары
-    {
-        sku: 'YAM-F310',
-        name: 'Yamaha F310',
-        slug: 'yamaha-f310',
-        brand: 'Yamaha',
-        category: 'guitars',
-        subcategory: 'acoustic',
-        price: 15990,
-        oldPrice: 18990,
-        stockQuantity: 10,
-        description: 'Классическая акустическая гитара Yamaha F310 - идеальный выбор для начинающих музыкантов. Инструмент обладает ярким, сбалансированным звучанием и удобной эргономикой.',
-        specifications: {
-            'Тип': 'Дредноут',
-            'Верхняя дека': 'Ель',
-            'Задняя дека и обечайки': 'Меранти',
-            'Гриф': 'Нато',
-            'Накладка грифа': 'Палисандр',
-            'Количество ладов': '20',
-            'Мензура': '634 мм',
-            'Ширина грифа у порожка': '43 мм'
-        },
-        isFeatured: true,
-        isNew: false
-    },
-    {
-        sku: 'FEN-STRAT-PLR',
-        name: 'Fender Player Stratocaster',
-        slug: 'fender-player-stratocaster',
-        brand: 'Fender',
-        category: 'guitars',
-        subcategory: 'electric',
-        price: 89990,
-        stockQuantity: 5,
-        description: 'Легендарная электрогитара Fender Stratocaster серии Player. Классическое звучание, которое определило звук рок-музыки.',
-        specifications: {
-            'Корпус': 'Ольха',
-            'Гриф': 'Клён',
-            'Накладка грифа': 'Клён',
-            'Профиль грифа': 'Modern C',
-            'Количество ладов': '22',
-            'Звукосниматели': '3x Player Series Alnico 5 Strat Single-Coil',
-            'Бридж': '2-точечный Tremolo',
-            'Цвет': 'Sonic Red'
-        },
-        isFeatured: true,
-        isNew: true
-    },
-    {
-        sku: 'GIB-LP-STD',
-        name: 'Gibson Les Paul Standard',
-        slug: 'gibson-les-paul-standard',
-        brand: 'Gibson',
-        category: 'guitars',
-        subcategory: 'electric',
-        price: 249990,
-        stockQuantity: 2,
-        description: 'Gibson Les Paul Standard - икона рок-музыки. Мощное звучание хамбакеров и sustain, который длится вечность.',
-        specifications: {
-            'Корпус': 'Красное дерево',
-            'Топ': 'Клён AA',
-            'Гриф': 'Красное дерево',
-            'Накладка грифа': 'Палисандр',
-            'Звукосниматели': 'Burstbucker Pro',
-            'Бридж': 'Tune-o-matic',
-            'Машинки': 'Grover',
-            'Цвет': 'Bourbon Burst'
-        },
-        isFeatured: true,
-        isNew: false
-    },
-    {
-        sku: 'IBZ-SR305',
-        name: 'Ibanez SR305 Bass',
-        slug: 'ibanez-sr305-bass',
-        brand: 'Ibanez',
-        category: 'guitars',
-        subcategory: 'bass',
-        price: 45990,
-        stockQuantity: 7,
-        description: '5-струнная бас-гитара Ibanez SR305 с активной электроникой. Универсальный инструмент для любых стилей музыки.',
-        specifications: {
-            'Количество струн': '5',
-            'Корпус': 'Агатис',
-            'Гриф': 'Клён',
-            'Накладка': 'Палисандр',
-            'Звукосниматели': 'PowerSpan Dual Coil',
-            'Электроника': 'Активная, 3-полосный EQ',
-            'Бридж': 'Accu-cast B305',
-            'Цвет': 'Weathered Black'
-        },
-        isFeatured: false,
-        isNew: false
-    },
-
-    // Клавишные
-    {
-        sku: 'ROL-FP30X',
-        name: 'Roland FP-30X',
-        slug: 'roland-fp-30x',
-        brand: 'Roland',
-        category: 'keyboards',
-        subcategory: 'pianos',
-        price: 64990,
-        oldPrice: 69990,
-        stockQuantity: 4,
-        description: 'Портативное цифровое пианино Roland FP-30X с клавиатурой PHA-4 и технологией SuperNATURAL Piano.',
-        specifications: {
-            'Клавиатура': '88 клавиш, PHA-4 Standard',
-            'Звуковой процессор': 'SuperNATURAL Piano',
-            'Полифония': '256 голосов',
-            'Тембры': '56 тембров',
-            'Эффекты': 'Ambience, Brilliance',
-            'Bluetooth': 'MIDI и Audio',
-            'Выходы': 'Наушники x2, Линейный выход',
-            'Вес': '14.8 кг'
-        },
-        isFeatured: true,
-        isNew: false
-    },
-    {
-        sku: 'YAM-PSR-E373',
-        name: 'Yamaha PSR-E373',
-        slug: 'yamaha-psr-e373',
-        brand: 'Yamaha',
-        category: 'keyboards',
-        subcategory: 'synthesizers',
-        price: 29990,
-        stockQuantity: 12,
-        description: 'Синтезатор Yamaha PSR-E373 с 61 клавишей и 622 тембрами. Идеален для обучения и домашнего музицирования.',
-        specifications: {
-            'Клавиатура': '61 клавиша',
-            'Полифония': '48 голосов',
-            'Тембры': '622',
-            'Стили': '205',
-            'Эффекты': 'Reverb, Chorus, DSP',
-            'Обучение': 'Yamaha Education Suite',
-            'Подключение': 'USB TO HOST',
-            'Питание': 'Адаптер или батарейки'
-        },
-        isFeatured: false,
-        isNew: true
-    },
-    {
-        sku: 'KORG-KRONOS2',
-        name: 'Korg Kronos 2',
-        slug: 'korg-kronos-2',
-        brand: 'Korg',
-        category: 'keyboards',
-        subcategory: 'synthesizers',
-        price: 299990,
-        stockQuantity: 1,
-        description: 'Профессиональная музыкальная рабочая станция Korg Kronos 2. Девять движков синтеза в одном инструменте.',
-        specifications: {
-            'Клавиатура': '88 клавиш, RH3',
-            'Движки синтеза': '9 типов',
-            'Полифония': 'До 400 голосов',
-            'Память': '62 ГБ SSD',
-            'Секвенсер': '16 треков MIDI + 16 аудио',
-            'Дисплей': '8" TouchView цветной',
-            'Эффекты': '16 процессоров',
-            'Вес': '24.1 кг'
-        },
-        isFeatured: true,
-        isNew: true
-    },
-
-    // Ударные
-    {
-        sku: 'PEARL-EXX725',
-        name: 'Pearl Export Series',
-        slug: 'pearl-export-series',
-        brand: 'Pearl',
-        category: 'drums',
-        subcategory: 'acoustic-drums',
-        price: 119990,
-        stockQuantity: 3,
-        description: 'Акустическая ударная установка Pearl Export Series. Легендарное качество Pearl по доступной цене.',
-        specifications: {
-            'Бас-барабан': '22"x18"',
-            'Том-томы': '10"x7", 12"x8"',
-            'Напольный том': '16"x16"',
-            'Малый барабан': '14"x5.5"',
-            'Материал': 'Тополь/Красное дерево',
-            'Фурнитура': 'Хром',
-            'Стойки': 'В комплекте',
-            'Цвет': 'Jet Black'
-        },
-        isFeatured: true,
-        isNew: true
-    },
-    {
-        sku: 'ROL-TD17KVX',
-        name: 'Roland TD-17KVX',
-        slug: 'roland-td-17kvx',
-        brand: 'Roland',
-        category: 'drums',
-        subcategory: 'electronic-drums',
-        price: 149990,
-        stockQuantity: 2,
-        description: 'Электронная ударная установка Roland TD-17KVX с модулем TD-17 и пэдами PDX-12.',
-        specifications: {
-            'Звуковой модуль': 'TD-17',
-            'Пресеты': '50 наборов',
-            'Малый барабан': 'PDX-12',
-            'Томы': 'PDX-8 x3',
-            'Бас-барабан': 'KD-10',
-            'Хай-хэт': 'VH-10',
-            'Тарелки': 'CY-13R, CY-12C',
-            'Функции обучения': 'Есть'
-        },
-        isFeatured: false,
-        isNew: false
-    },
-
-    // Духовые
-    {
-        sku: 'YAM-YAS280',
-        name: 'Yamaha YAS-280',
-        slug: 'yamaha-yas-280',
-        brand: 'Yamaha',
-        category: 'wind',
-        price: 89990,
-        oldPrice: 94990,
-        stockQuantity: 4,
-        description: 'Альт-саксофон Yamaha YAS-280 для начинающих и продолжающих музыкантов. Легкость игры и яркий звук.',
-        specifications: {
-            'Строй': 'Eb',
-            'Корпус': 'Латунь',
-            'Покрытие': 'Золотой лак',
-            'Клапаны': 'Улучшенная механика',
-            'Мундштук': 'AS-4C в комплекте',
-            'Эска': 'Регулируемая',
-            'Кейс': 'Легкий кейс в комплекте',
-            'Вес': '2.3 кг'
-        },
-        isFeatured: false,
-        isNew: false
-    },
-    {
-        sku: 'YAM-YTR2330',
-        name: 'Yamaha YTR-2330',
-        slug: 'yamaha-ytr-2330',
-        brand: 'Yamaha',
-        category: 'wind',
-        price: 45990,
-        stockQuantity: 6,
-        description: 'Труба Yamaha YTR-2330 - отличный выбор для начинающих трубачей. Легкий отклик и интонационная точность.',
-        specifications: {
-            'Строй': 'Bb',
-            'Мензура': 'ML',
-            'Раструб': '123 мм',
-            'Материал': 'Латунь',
-            'Покрытие': 'Золотой лак',
-            'Вентили': 'Нержавеющая сталь',
-            'Мундштук': 'TR-11B4',
-            'Кейс': 'В комплекте'
-        },
-        isFeatured: false,
-        isNew: true
-    },
-
-    // Студийное оборудование
-    {
-        sku: 'SHURE-SM58',
-        name: 'Shure SM58',
-        slug: 'shure-sm58',
-        brand: 'Shure',
-        category: 'studio',
-        price: 8990,
-        stockQuantity: 20,
-        description: 'Легендарный вокальный микрофон Shure SM58. Стандарт индустрии для живых выступлений.',
-        specifications: {
-            'Тип': 'Динамический',
-            'Диаграмма направленности': 'Кардиоида',
-            'Частотный диапазон': '50 - 15000 Гц',
-            'Чувствительность': '-54.5 дБВ/Па',
-            'Импеданс': '150 Ом',
-            'Разъем': 'XLR',
-            'Вес': '298 г',
-            'Аксессуары': 'Держатель, чехол'
-        },
-        isFeatured: false,
-        isNew: false
-    },
-    {
-        sku: 'SHURE-SM57',
-        name: 'Shure SM57',
-        slug: 'shure-sm57',
-        brand: 'Shure',
-        category: 'studio',
-        price: 8490,
-        stockQuantity: 15,
-        description: 'Инструментальный микрофон Shure SM57. Идеален для записи гитарных усилителей и ударных.',
-        specifications: {
-            'Тип': 'Динамический',
-            'Диаграмма направленности': 'Кардиоида',
-            'Частотный диапазон': '40 - 15000 Гц',
-            'Чувствительность': '-56.0 дБВ/Па',
-            'Импеданс': '150 Ом',
-            'Разъем': 'XLR',
-            'Максимальное SPL': '94 дБ',
-            'Вес': '284 г'
-        },
-        isFeatured: false,
-        isNew: false
-    },
-
-    // Аксессуары
-    {
-        sku: 'DADDARIO-EXL110',
-        name: 'D\'Addario EXL110',
-        slug: 'daddario-exl110',
-        brand: 'D\'Addario',
-        category: 'accessories',
-        price: 590,
-        stockQuantity: 100,
-        description: 'Струны для электрогитары D\'Addario EXL110. Никелированная обмотка, калибр 10-46.',
-        specifications: {
-            'Калибр': '.010, .013, .017, .026, .036, .046',
-            'Материал': 'Никелированная сталь',
-            'Натяжение': 'Regular Light',
-            'Упаковка': 'Герметичная'
-        },
-        isFeatured: false,
-        isNew: false
-    },
-    {
-        sku: 'DUNLOP-TORTEX',
-        name: 'Dunlop Tortex Standard',
-        slug: 'dunlop-tortex-standard',
-        brand: 'Dunlop',
-        category: 'accessories',
-        price: 50,
-        stockQuantity: 500,
-        description: 'Медиаторы Dunlop Tortex Standard 0.88mm. Классические медиаторы с отличным контролем.',
-        specifications: {
-            'Толщина': '0.88 мм',
-            'Материал': 'Tortex',
-            'Цвет': 'Зеленый',
-            'Форма': 'Standard'
-        },
-        isFeatured: false,
-        isNew: false
-    }
-];
-
-// Функция для создания slug
-function createSlug(text) {
-    return text
-        .toLowerCase()
-        .replace(/[^\w\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-')
-        .trim();
+// Функция для создания хеша пароля
+async function hashPassword(password) {
+    return await bcrypt.hash(password, 10);
 }
 
-// Основная функция заполнения
-async function seed() {
+// Основная функция заполнения данных
+async function seedDatabase() {
     const client = await pool.connect();
     
     try {
-        console.log('🌱 Начинаем заполнение базы данных...\n');
+        console.log('🌱 Starting database seeding...');
+        
+        // Проверяем, есть ли уже данные
+        const userCount = await client.query('SELECT COUNT(*) FROM users');
+        if (parseInt(userCount.rows[0].count) > 0) {
+            console.log('ℹ️  Database already has data. Skipping seeding.');
+            return;
+        }
         
         await client.query('BEGIN');
         
-        // 1. Создаем тестовых пользователей
-        console.log('👤 Создаем пользователей...');
+        // ======================================
+        // 1. Создание пользователей
+        // ======================================
+        console.log('👤 Creating users...');
         
-        const adminPassword = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'admin123', 10);
-        const userPassword = await bcrypt.hash('password123', 10);
+        const adminPassword = await hashPassword('admin123');
+        const userPassword = await hashPassword('password123');
         
-        const adminResult = await client.query(`
-            INSERT INTO users (email, password_hash, first_name, last_name, role)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (email) DO UPDATE
-            SET password_hash = $2, first_name = $3, last_name = $4
-            RETURNING id
-        `, ['admin@mustore.ru', adminPassword, 'Администратор', 'Системы', 'admin']);
+        await client.query(`
+            INSERT INTO users (email, password_hash, first_name, last_name, role) VALUES 
+            ('admin@mustore.ru', $1, 'Администратор', 'MuStore', 'admin'),
+            ('user@example.com', $2, 'Иван', 'Иванов', 'customer'),
+            ('manager@mustore.ru', $1, 'Менеджер', 'Продаж', 'customer'),
+            ('demo@mustore.ru', $2, 'Демо', 'Пользователь', 'customer')
+        `, [adminPassword, userPassword]);
         
-        const userResult = await client.query(`
-            INSERT INTO users (email, password_hash, first_name, last_name, role)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (email) DO UPDATE
-            SET password_hash = $2, first_name = $3, last_name = $4
-            RETURNING id
-        `, ['user@example.com', userPassword, 'Иван', 'Иванов', 'customer']);
+        console.log('✅ Users created');
         
-        console.log('✅ Пользователи созданы\n');
+        // ======================================
+        // 2. Создание категорий
+        // ======================================
+        console.log('📂 Creating categories...');
         
-        // 2. Создаем дополнительные бренды если нужно
-        console.log('🏷️  Создаем бренды...');
+        const categoriesData = [
+            { name: 'Гитары', slug: 'guitars', description: 'Акустические и электрические гитары', icon: '🎸', sort: 1 },
+            { name: 'Клавишные', slug: 'keyboards', description: 'Пианино, синтезаторы, MIDI-клавиатуры', icon: '🎹', sort: 2 },
+            { name: 'Ударные', slug: 'drums', description: 'Барабанные установки и перкуссия', icon: '🥁', sort: 3 },
+            { name: 'Духовые', slug: 'wind', description: 'Саксофоны, трубы, флейты', icon: '🎺', sort: 4 },
+            { name: 'Студийное оборудование', slug: 'studio', description: 'Микрофоны, мониторы, интерфейсы', icon: '🎙️', sort: 5 },
+            { name: 'Аксессуары', slug: 'accessories', description: 'Струны, медиаторы, чехлы', icon: '🎵', sort: 6 }
+        ];
         
-        const brands = ['D\'Addario', 'Dunlop'];
-        for (const brandName of brands) {
+        for (const cat of categoriesData) {
             await client.query(`
-                INSERT INTO brands (name, slug, country)
+                INSERT INTO categories (name, slug, description, icon, sort_order) 
+                VALUES ($1, $2, $3, $4, $5)
+            `, [cat.name, cat.slug, cat.description, cat.icon, cat.sort]);
+        }
+        
+        console.log('✅ Categories created');
+        
+        // ======================================
+        // 3. Создание подкатегорий
+        // ======================================
+        console.log('📁 Creating subcategories...');
+        
+        const subcategoriesData = [
+            // Гитары
+            { category: 'guitars', name: 'Акустические гитары', slug: 'acoustic', sort: 1 },
+            { category: 'guitars', name: 'Электрогитары', slug: 'electric', sort: 2 },
+            { category: 'guitars', name: 'Бас-гитары', slug: 'bass', sort: 3 },
+            { category: 'guitars', name: 'Классические гитары', slug: 'classical', sort: 4 },
+            
+            // Клавишные
+            { category: 'keyboards', name: 'Синтезаторы', slug: 'synthesizers', sort: 1 },
+            { category: 'keyboards', name: 'Цифровые пианино', slug: 'pianos', sort: 2 },
+            { category: 'keyboards', name: 'MIDI-клавиатуры', slug: 'midi', sort: 3 },
+            
+            // Ударные
+            { category: 'drums', name: 'Акустические ударные', slug: 'acoustic-drums', sort: 1 },
+            { category: 'drums', name: 'Электронные ударные', slug: 'electronic-drums', sort: 2 },
+            { category: 'drums', name: 'Перкуссия', slug: 'percussion', sort: 3 }
+        ];
+        
+        for (const sub of subcategoriesData) {
+            await client.query(`
+                INSERT INTO subcategories (category_id, name, slug, sort_order) 
+                VALUES (
+                    (SELECT id FROM categories WHERE slug = $1),
+                    $2, $3, $4
+                )
+            `, [sub.category, sub.name, sub.slug, sub.sort]);
+        }
+        
+        console.log('✅ Subcategories created');
+        
+        // ======================================
+        // 4. Создание брендов
+        // ======================================
+        console.log('🏷️ Creating brands...');
+        
+        const brandsData = [
+            { name: 'Yamaha', slug: 'yamaha', description: 'Японский производитель музыкальных инструментов' },
+            { name: 'Fender', slug: 'fender', description: 'Американская компания, производитель гитар' },
+            { name: 'Gibson', slug: 'gibson', description: 'Легендарный американский производитель гитар' },
+            { name: 'Roland', slug: 'roland', description: 'Японский производитель электронных музыкальных инструментов' },
+            { name: 'Korg', slug: 'korg', description: 'Японская компания, специализирующаяся на синтезаторах' },
+            { name: 'Pearl', slug: 'pearl', description: 'Японский производитель ударных инструментов' },
+            { name: 'Shure', slug: 'shure', description: 'Американский производитель аудиооборудования' },
+            { name: 'Ibanez', slug: 'ibanez', description: 'Японский производитель гитар' },
+            { name: 'Martin', slug: 'martin', description: 'Американский производитель акустических гитар' },
+            { name: 'Casio', slug: 'casio', description: 'Японский производитель электронных инструментов' }
+        ];
+        
+        for (const brand of brandsData) {
+            await client.query(`
+                INSERT INTO brands (name, slug, description) 
                 VALUES ($1, $2, $3)
-                ON CONFLICT (slug) DO NOTHING
-            `, [brandName, createSlug(brandName), 'США']);
+            `, [brand.name, brand.slug, brand.description]);
         }
         
-        console.log('✅ Бренды созданы\n');
+        console.log('✅ Brands created');
         
-        // 3. Добавляем товары
-        console.log('📦 Добавляем товары...');
+        // ======================================
+        // 5. Создание товаров
+        // ======================================
+        console.log('🎸 Creating products...');
         
-        let addedCount = 0;
-        
-        for (const product of testProducts) {
-            try {
-                // Получаем ID бренда
-                const brandResult = await client.query(
-                    'SELECT id FROM brands WHERE slug = $1',
-                    [createSlug(product.brand)]
-                );
-                
-                if (brandResult.rows.length === 0) {
-                    console.log(`⚠️  Бренд ${product.brand} не найден, пропускаем товар ${product.name}`);
-                    continue;
+        const productsData = [
+            // Гитары
+            {
+                sku: 'YAM-F310',
+                name: 'Yamaha F310',
+                slug: 'yamaha-f310',
+                description: 'Классическая акустическая гитара для начинающих и опытных музыкантов. Отличается ярким и сбалансированным звучанием.',
+                brand: 'yamaha',
+                category: 'guitars',
+                subcategory: 'acoustic',
+                price: 15990,
+                oldPrice: 18990,
+                stock: 15,
+                featured: true,
+                isNew: false,
+                specs: {
+                    "Тип": "Дредноут",
+                    "Верхняя дека": "Ель",
+                    "Задняя дека и обечайки": "Меранти",
+                    "Гриф": "Нато",
+                    "Накладка грифа": "Палисандр",
+                    "Количество ладов": "20",
+                    "Мензура": "634 мм"
                 }
-                
-                const brandId = brandResult.rows[0].id;
-                
-                // Получаем ID категории
-                const categoryResult = await client.query(
-                    'SELECT id FROM categories WHERE slug = $1',
-                    [product.category]
-                );
-                
-                if (categoryResult.rows.length === 0) {
-                    console.log(`⚠️  Категория ${product.category} не найдена, пропускаем товар ${product.name}`);
-                    continue;
+            },
+            {
+                sku: 'FEN-STRAT-PLAYER',
+                name: 'Fender Stratocaster Player',
+                slug: 'fender-stratocaster-player',
+                description: 'Легендарная электрогитара с классическим звучанием Fender. Идеальна для всех стилей музыки.',
+                brand: 'fender',
+                category: 'guitars',
+                subcategory: 'electric',
+                price: 89990,
+                oldPrice: null,
+                stock: 8,
+                featured: true,
+                isNew: true,
+                specs: {
+                    "Корпус": "Ольха",
+                    "Гриф": "Клён",
+                    "Накладка грифа": "Клён",
+                    "Количество ладов": "22",
+                    "Звукосниматели": "3x Player Series Alnico 5 Strat Single-Coil",
+                    "Бридж": "Tremolo 2-точечный",
+                    "Цвет": "Sonic Red"
                 }
-                
-                const categoryId = categoryResult.rows[0].id;
-                
-                // Получаем ID подкатегории если есть
-                let subcategoryId = null;
-                if (product.subcategory) {
-                    const subcategoryResult = await client.query(
-                        'SELECT id FROM subcategories WHERE slug = $1 AND category_id = $2',
-                        [product.subcategory, categoryId]
-                    );
-                    
-                    if (subcategoryResult.rows.length > 0) {
-                        subcategoryId = subcategoryResult.rows[0].id;
-                    }
+            },
+            {
+                sku: 'GIB-LESPAUL-STD',
+                name: 'Gibson Les Paul Standard',
+                slug: 'gibson-les-paul-standard',
+                description: 'Классическая электрогитара с мощным звучанием хамбакеров и премиальными материалами.',
+                brand: 'gibson',
+                category: 'guitars',
+                subcategory: 'electric',
+                price: 249990,
+                oldPrice: null,
+                stock: 3,
+                featured: true,
+                isNew: false,
+                specs: {
+                    "Корпус": "Красное дерево",
+                    "Топ": "Клён AA",
+                    "Гриф": "Красное дерево",
+                    "Накладка грифа": "Палисандр",
+                    "Звукосниматели": "Burstbucker Pro",
+                    "Бридж": "Tune-o-matic",
+                    "Цвет": "Bourbon Burst"
                 }
-                
-                // Вставляем товар
-                const productResult = await client.query(`
-                    INSERT INTO products (
-                        sku, name, slug, brand_id, category_id, subcategory_id,
-                        description, specifications, price, old_price, cost_price,
-                        stock_quantity, is_available, is_featured, is_new
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-                    ON CONFLICT (sku) DO UPDATE
-                    SET 
-                        name = $2, 
-                        price = $9, 
-                        old_price = $10,
-                        stock_quantity = $12,
-                        is_featured = $14,
-                        is_new = $15,
-                        updated_at = CURRENT_TIMESTAMP
-                    RETURNING id
-                `, [
-                    product.sku,
-                    product.name,
-                    product.slug,
-                    brandId,
-                    categoryId,
-                    subcategoryId,
-                    product.description,
-                    JSON.stringify(product.specifications || {}),
-                    product.price,
-                    product.oldPrice || null,
-                    Math.round(product.price * 0.7), // cost_price = 70% от цены
-                    product.stockQuantity || 0,
-                    true, // is_available
-                    product.isFeatured || false,
-                    product.isNew || false
-                ]);
-                
-                const productId = productResult.rows[0].id;
-                
-                // Добавляем изображение-заглушку
-                await client.query(`
-                    INSERT INTO product_images (product_id, image_url, is_primary)
-                    VALUES ($1, $2, $3)
-                    ON CONFLICT ON CONSTRAINT unique_primary_image DO NOTHING
-                `, [
-                    productId,
-                    `https://picsum.photos/seed/${product.sku}/400/400`,
-                    true
-                ]);
-                
-                addedCount++;
-                console.log(`✅ Добавлен товар: ${product.name}`);
-                
-            } catch (error) {
-                console.error(`❌ Ошибка при добавлении товара ${product.name}:`, error.message);
+            },
+            {
+                sku: 'IBZ-RG350DXZ',
+                name: 'Ibanez RG350DXZ',
+                slug: 'ibanez-rg350dxz',
+                description: 'Современная электрогитара для рока и металла с быстрым грифом и мощными звукоснимателями.',
+                brand: 'ibanez',
+                category: 'guitars',
+                subcategory: 'electric',
+                price: 45990,
+                oldPrice: 52990,
+                stock: 12,
+                featured: false,
+                isNew: true,
+                specs: {
+                    "Корпус": "Липа",
+                    "Гриф": "Клён",
+                    "Накладка грифа": "Палисандр",
+                    "Количество ладов": "24",
+                    "Звукосниматели": "INF3 (H) / INF3 (S) / INF3 (H)",
+                    "Бридж": "Fixed"
+                }
+            },
+            {
+                sku: 'MAR-D28',
+                name: 'Martin D-28',
+                slug: 'martin-d28',
+                description: 'Премиальная акустическая гитара с богатым басовитым звучанием и превосходной проекцией.',
+                brand: 'martin',
+                category: 'guitars',
+                subcategory: 'acoustic',
+                price: 189990,
+                oldPrice: null,
+                stock: 2,
+                featured: true,
+                isNew: false,
+                specs: {
+                    "Тип": "Дредноут",
+                    "Верхняя дека": "Ель Ситка",
+                    "Задняя дека и обечайки": "Палисандр Ост-Индский",
+                    "Гриф": "Красное дерево селект",
+                    "Накладка грифа": "Эбони",
+                    "Количество ладов": "20",
+                    "Мензура": "645 мм"
+                }
+            },
+            
+            // Клавишные
+            {
+                sku: 'ROL-FP30X',
+                name: 'Roland FP-30X',
+                slug: 'roland-fp-30x',
+                description: 'Портативное цифровое пианино с аутентичным звучанием и взвешенной клавиатурой.',
+                brand: 'roland',
+                category: 'keyboards',
+                subcategory: 'pianos',
+                price: 64990,
+                oldPrice: 69990,
+                stock: 5,
+                featured: true,
+                isNew: false,
+                specs: {
+                    "Клавиатура": "88 клавиш, PHA-4 Standard",
+                    "Полифония": "256 голосов",
+                    "Тембры": "56 тембров",
+                    "Эффекты": "Ambience, Brilliance",
+                    "Записывающее устройство": "SMF",
+                    "Bluetooth": "Да (MIDI, Audio)",
+                    "Выходы": "Наушники, линейный выход"
+                }
+            },
+            {
+                sku: 'KOR-KRONOS2',
+                name: 'Korg Kronos 2',
+                slug: 'korg-kronos-2',
+                description: 'Профессиональная музыкальная рабочая станция с девятью движками синтеза.',
+                brand: 'korg',
+                category: 'keyboards',
+                subcategory: 'synthesizers',
+                price: 299990,
+                oldPrice: null,
+                stock: 1,
+                featured: true,
+                isNew: true,
+                specs: {
+                    "Клавиатура": "88 клавиш, RH3",
+                    "Движки синтеза": "9 типов",
+                    "Полифония": "До 400 голосов",
+                    "Память": "62 ГБ SSD",
+                    "Секвенсер": "16 треков MIDI + 16 аудио",
+                    "Дисплей": "8\" TouchView"
+                }
+            },
+            {
+                sku: 'CAS-PRIVIA-PX770',
+                name: 'Casio Privia PX-770',
+                slug: 'casio-privia-px770',
+                description: 'Компактное цифровое пианино с натуральным звучанием и элегантным дизайном.',
+                brand: 'casio',
+                category: 'keyboards',
+                subcategory: 'pianos',
+                price: 42990,
+                oldPrice: 47990,
+                stock: 8,
+                featured: false,
+                isNew: false,
+                specs: {
+                    "Клавиатура": "88 клавиш, Tri-sensor Scaled Hammer Action",
+                    "Полифония": "128 голосов",
+                    "Тембры": "19 тембров",
+                    "Реверберация": "4 типа",
+                    "Chorus": "4 типа",
+                    "Встроенные композиции": "60"
+                }
+            },
+            
+            // Ударные
+            {
+                sku: 'PEARL-EXPORT',
+                name: 'Pearl Export Series',
+                slug: 'pearl-export-series',
+                description: 'Профессиональная барабанная установка для сцены и студии с отличным соотношением цена/качество.',
+                brand: 'pearl',
+                category: 'drums',
+                subcategory: 'acoustic-drums',
+                price: 119990,
+                oldPrice: null,
+                stock: 3,
+                featured: true,
+                isNew: true,
+                specs: {
+                    "Бас-барабан": "22\"x18\"",
+                    "Том-томы": "10\"x7\", 12\"x8\"",
+                    "Напольный том": "16\"x16\"",
+                    "Малый барабан": "14\"x5.5\"",
+                    "Материал": "Тополь/Красное дерево",
+                    "Фурнитура": "Хром",
+                    "Цвет": "Jet Black"
+                }
+            },
+            {
+                sku: 'ROL-TD17KVX',
+                name: 'Roland TD-17KVX',
+                slug: 'roland-td17kvx',
+                description: 'Электронная барабанная установка с реалистичными mesh пэдами и профессиональными звуками.',
+                brand: 'roland',
+                category: 'drums',
+                subcategory: 'electronic-drums',
+                price: 84990,
+                oldPrice: 92990,
+                stock: 4,
+                featured: false,
+                isNew: true,
+                specs: {
+                    "Модуль": "TD-17",
+                    "Пэды": "Mesh (малый барабан, том-томы)",
+                    "Тарелки": "CY-5 x2, CY-8 x1",
+                    "Hi-Hat": "VH-10",
+                    "Кик-пэд": "KD-10",
+                    "Количество звуков": "310+",
+                    "Кит-сеты": "50"
+                }
+            },
+            
+            // Студийное оборудование
+            {
+                sku: 'SHURE-SM58',
+                name: 'Shure SM58',
+                slug: 'shure-sm58',
+                description: 'Легендарный вокальный микрофон для сцены и студии. Стандарт индустрии.',
+                brand: 'shure',
+                category: 'studio',
+                subcategory: null,
+                price: 8990,
+                oldPrice: null,
+                stock: 20,
+                featured: false,
+                isNew: false,
+                specs: {
+                    "Тип": "Динамический",
+                    "Диаграмма направленности": "Кардиоида",
+                    "Частотный диапазон": "50 - 15000 Гц",
+                    "Чувствительность": "-54.5 дБВ/Па",
+                    "Импеданс": "150 Ом",
+                    "Разъем": "XLR"
+                }
+            },
+            {
+                sku: 'SHURE-SM57',
+                name: 'Shure SM57',
+                slug: 'shure-sm57',
+                description: 'Универсальный динамический микрофон для записи инструментов и усилителей.',
+                brand: 'shure',
+                category: 'studio',
+                subcategory: null,
+                price: 7990,
+                oldPrice: null,
+                stock: 15,
+                featured: false,
+                isNew: false,
+                specs: {
+                    "Тип": "Динамический",
+                    "Диаграмма направленности": "Кардиоида",
+                    "Частотный диапазон": "40 - 15000 Гц",
+                    "Чувствительность": "-56 дБВ/Па",
+                    "Импеданс": "150 Ом",
+                    "Разъем": "XLR"
+                }
             }
-        }
+        ];
         
-        console.log(`\n✅ Добавлено товаров: ${addedCount}\n`);
-        
-        // 4. Создаем тестовые заказы
-        console.log('📋 Создаем тестовые заказы...');
-        
-        // Заказ для пользователя
-        const orderResult = await client.query(`
-            INSERT INTO orders (
-                order_number, user_id, status, total_amount,
-                customer_name, customer_email, customer_phone,
-                delivery_address, delivery_method, payment_method
-            ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
-            ) RETURNING id
-        `, [
-            '2024000001',
-            userResult.rows[0].id,
-            'delivered',
-            89990,
-            'Иван Иванов',
-            'user@example.com',
-            '+7 (900) 123-45-67',
-            'г. Нижний Новгород, ул. Ленина, д. 1, кв. 1',
-            'delivery',
-            'cash'
-        ]);
-        
-        // Добавляем товары в заказ
-        const orderProductResult = await client.query(
-            'SELECT id, name, sku, price FROM products WHERE sku = $1',
-            ['FEN-STRAT-PLR']
-        );
-        
-        if (orderProductResult.rows.length > 0) {
-            const orderProduct = orderProductResult.rows[0];
-            await client.query(`
-                INSERT INTO order_items (
-                    order_id, product_id, product_name, product_sku,
-                    quantity, price, subtotal
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        // Вставляем товары
+        for (const product of productsData) {
+            const productResult = await client.query(`
+                INSERT INTO products (
+                    sku, name, slug, description, brand_id, category_id, subcategory_id,
+                    price, old_price, stock_quantity, is_featured, is_new, specifications
+                ) VALUES (
+                    $1, $2, $3, $4,
+                    (SELECT id FROM brands WHERE slug = $5),
+                    (SELECT id FROM categories WHERE slug = $6),
+                    (SELECT id FROM subcategories WHERE slug = $7),
+                    $8, $9, $10, $11, $12, $13
+                ) RETURNING id
             `, [
-                orderResult.rows[0].id,
-                orderProduct.id,
-                orderProduct.name,
-                orderProduct.sku,
-                1,
-                orderProduct.price,
-                orderProduct.price
+                product.sku, product.name, product.slug, product.description,
+                product.brand, product.category, product.subcategory,
+                product.price, product.oldPrice, product.stock,
+                product.featured, product.isNew, JSON.stringify(product.specs)
             ]);
+            
+            // Добавляем основное изображение для каждого товара
+            const imageUrl = `https://images.unsplash.com/photo-${getImageIdForProduct(product.category)}?w=400`;
+            const thumbnailUrl = `https://images.unsplash.com/photo-${getImageIdForProduct(product.category)}?w=200`;
+            
+            await client.query(`
+                INSERT INTO product_images (product_id, image_url, thumbnail_url, is_primary, sort_order)
+                VALUES ($1, $2, $3, true, 0)
+            `, [productResult.rows[0].id, imageUrl, thumbnailUrl]);
         }
         
-        console.log('✅ Тестовые заказы созданы\n');
+        console.log('✅ Products created');
         
         await client.query('COMMIT');
-        
-        console.log('🎉 Заполнение базы данных завершено успешно!');
+        console.log('🎉 Database seeding completed successfully!');
         
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('❌ Ошибка при заполнении базы данных:', error);
+        console.error('❌ Error seeding database:', error);
         throw error;
     } finally {
         client.release();
     }
 }
 
-// Проверка уникальности для первичного ключа изображения
-async function createImageConstraint() {
-    try {
-        await pool.query(`
-            ALTER TABLE product_images 
-            ADD CONSTRAINT unique_primary_image 
-            UNIQUE (product_id, is_primary) 
-            WHERE (is_primary = true)
-        `);
-    } catch (error) {
-        // Игнорируем, если ограничение уже существует
-    }
+// Функция для получения ID изображения с Unsplash в зависимости от категории
+function getImageIdForProduct(category) {
+    const imageIds = {
+        'guitars': '1558098329-a11cff621064',
+        'keyboards': '1520523839897-bd0b52f945a0',
+        'drums': '1519892300165-cb5542fb47c7',
+        'wind': '1511192336575-5a79af67a629',
+        'studio': '1598488035139-bdbb2231ce04',
+        'accessories': '1493225457124-a3eb161ffa5f'
+    };
+    
+    return imageIds[category] || imageIds['guitars'];
 }
 
-// Запуск
-(async () => {
-    try {
-        await createImageConstraint();
-        await seed();
-        process.exit(0);
-    } catch (error) {
-        console.error('Критическая ошибка:', error);
-        process.exit(1);
-    }
-})();
+// Запуск скрипта
+if (require.main === module) {
+    seedDatabase()
+        .then(() => {
+            console.log('✅ Seeding completed');
+            process.exit(0);
+        })
+        .catch((error) => {
+            console.error('❌ Seeding failed:', error);
+            process.exit(1);
+        });
+}
+
+module.exports = { seedDatabase };
