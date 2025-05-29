@@ -373,6 +373,21 @@ App.Cart = {
         });
     },
 
+    async clearCart() {
+        try {
+            await API.clearCart();
+            await this.loadCart();
+            App.UI.showNotification('Корзина очищена', 'success');
+            
+            // Если мы на странице корзины, обновляем её
+            if (window.location.hash === '#cart') {
+                this.showCart();
+            }
+        } catch (error) {
+            App.UI.showNotification('Ошибка при очистке корзины', 'error');
+        }
+    },
+
     async loadCart() {
         try {
             const cartData = await API.getCart();
@@ -699,6 +714,417 @@ App.Pages = {
         }
     },
 
+    async showCheckout() {
+        App.UI.updateBreadcrumb([
+            { text: 'Главная', link: 'home' },
+            { text: 'Корзина', link: 'cart' },
+            { text: 'Оформление заказа', link: 'checkout' }
+        ]);
+
+        const content = document.getElementById('app-content');
+        
+        try {
+            App.UI.showLoader();
+            
+            // Загружаем корзину
+            const cartData = await API.getCart();
+            
+            if (!cartData.items || cartData.items.length === 0) {
+                content.innerHTML = `
+                    <div class="text-center">
+                        <h1>Корзина пуста</h1>
+                        <p>Добавьте товары в корзину, чтобы оформить заказ</p>
+                        <button class="btn btn-primary" onclick="App.Router.navigate('home')">
+                            Перейти к покупкам
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            content.innerHTML = `
+                <h1>Оформление заказа</h1>
+                <div class="checkout-container">
+                    <div class="checkout-form">
+                        <form id="orderForm">
+                            <h2>Контактная информация</h2>
+                            <div class="form-group">
+                                <label for="customerName">Имя и фамилия *</label>
+                                <input type="text" id="customerName" class="form-control" required 
+                                    value="${App.state.currentUser ? App.state.currentUser.name : ''}">
+                            </div>
+                            <div class="form-group">
+                                <label for="customerEmail">Email *</label>
+                                <input type="email" id="customerEmail" class="form-control" required
+                                    value="${App.state.currentUser ? App.state.currentUser.email : ''}">
+                            </div>
+                            <div class="form-group">
+                                <label for="customerPhone">Телефон *</label>
+                                <input type="tel" id="customerPhone" class="form-control" required
+                                    placeholder="+7 (___) ___-__-__">
+                            </div>
+
+                            <h2>Способ получения</h2>
+                            <div class="form-group">
+                                <label class="radio-label">
+                                    <input type="radio" name="deliveryMethod" value="pickup" checked>
+                                    Самовывоз (бесплатно)
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="deliveryMethod" value="delivery">
+                                    Доставка по городу (300₽)
+                                </label>
+                            </div>
+                            
+                            <div class="form-group" id="deliveryAddressGroup" style="display: none;">
+                                <label for="deliveryAddress">Адрес доставки</label>
+                                <textarea id="deliveryAddress" class="form-control" rows="3" 
+                                        placeholder="Улица, дом, квартира"></textarea>
+                            </div>
+
+                            <h2>Способ оплаты</h2>
+                            <div class="form-group">
+                                <label class="radio-label">
+                                    <input type="radio" name="paymentMethod" value="cash" checked>
+                                    Наличными при получении
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="paymentMethod" value="card">
+                                    Картой при получении
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="paymentMethod" value="online">
+                                    Онлайн оплата
+                                </label>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="orderNotes">Комментарий к заказу</label>
+                                <textarea id="orderNotes" class="form-control" rows="3" 
+                                        placeholder="Дополнительная информация"></textarea>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 20px;">
+                                Оформить заказ
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="checkout-summary">
+                        <h3>Ваш заказ</h3>
+                        <div class="order-items">
+                            ${cartData.items.map(item => `
+                                <div class="order-item">
+                                    <span>${item.name} × ${item.quantity}</span>
+                                    <span>${App.UI.formatPrice(item.price * item.quantity)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="order-totals">
+                            <div class="total-row">
+                                <span>Товары:</span>
+                                <span>${App.UI.formatPrice(cartData.summary.subtotal)}</span>
+                            </div>
+                            <div class="total-row">
+                                <span>Доставка:</span>
+                                <span id="deliveryPrice">${cartData.summary.delivery > 0 ? App.UI.formatPrice(cartData.summary.delivery) : 'Бесплатно'}</span>
+                            </div>
+                            <div class="total-row total">
+                                <span>Итого:</span>
+                                <span id="totalPrice">${App.UI.formatPrice(cartData.summary.total)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Обработчики для формы
+            this.initCheckoutForm(cartData);
+            
+        } catch (error) {
+            content.innerHTML = '<p class="text-center">Ошибка загрузки страницы оформления заказа</p>';
+            console.error('Error loading checkout:', error);
+        } finally {
+            App.UI.hideLoader();
+        }
+    },
+
+    initCheckoutForm(cartData) {
+        const form = document.getElementById('orderForm');
+        const deliveryRadios = document.querySelectorAll('input[name="deliveryMethod"]');
+        const addressGroup = document.getElementById('deliveryAddressGroup');
+        
+        // Показать/скрыть поле адреса
+        deliveryRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.value === 'delivery') {
+                    addressGroup.style.display = 'block';
+                    document.getElementById('deliveryAddress').required = true;
+                } else {
+                    addressGroup.style.display = 'none';
+                    document.getElementById('deliveryAddress').required = false;
+                }
+                this.updateOrderSummary(cartData);
+            });
+        });
+
+        // Обработка отправки формы
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.submitOrder(cartData);
+        });
+    },
+
+    updateOrderSummary(cartData) {
+        const deliveryMethod = document.querySelector('input[name="deliveryMethod"]:checked').value;
+        const deliveryPrice = deliveryMethod === 'delivery' ? 300 : 0;
+        const total = cartData.summary.subtotal + deliveryPrice;
+        
+        document.getElementById('deliveryPrice').textContent = 
+            deliveryPrice > 0 ? App.UI.formatPrice(deliveryPrice) : 'Бесплатно';
+        document.getElementById('totalPrice').textContent = App.UI.formatPrice(total);
+    },
+
+    async submitOrder(cartData) {
+        try {
+            App.UI.showLoader();
+            
+            const formData = new FormData(document.getElementById('orderForm'));
+            const orderData = {
+                customerName: formData.get('customerName') || document.getElementById('customerName').value,
+                customerEmail: formData.get('customerEmail') || document.getElementById('customerEmail').value,
+                customerPhone: formData.get('customerPhone') || document.getElementById('customerPhone').value,
+                deliveryMethod: formData.get('deliveryMethod') || 'pickup',
+                deliveryAddress: formData.get('deliveryAddress') || document.getElementById('deliveryAddress').value,
+                paymentMethod: formData.get('paymentMethod') || 'cash',
+                notes: formData.get('notes') || document.getElementById('orderNotes').value
+            };
+
+            // Создаем заказ (если API поддерживает)
+            // const order = await API.createOrder(orderData);
+            
+            // Очищаем корзину
+            await API.clearCart();
+            await App.Cart.loadCart();
+            
+            // Показываем страницу успеха
+            this.showOrderSuccess({
+                orderNumber: 'ORD-' + Date.now(),
+                customerName: orderData.customerName,
+                customerEmail: orderData.customerEmail
+            });
+            
+        } catch (error) {
+            App.UI.showNotification('Ошибка при оформлении заказа: ' + error.message, 'error');
+            console.error('Order submission error:', error);
+        } finally {
+            App.UI.hideLoader();
+        }
+    },
+
+    showOrderSuccess(orderData) {
+        const content = document.getElementById('app-content');
+        content.innerHTML = `
+            <div class="order-success">
+                <i class="fas fa-check-circle"></i>
+                <h1>Заказ успешно оформлен!</h1>
+                <p>Номер заказа: <strong>${orderData.orderNumber}</strong></p>
+                <p>Спасибо за покупку, ${orderData.customerName}!</p>
+                <p>Информация о заказе отправлена на ${orderData.customerEmail}</p>
+                <p>Мы свяжемся с вами в ближайшее время для подтверждения заказа.</p>
+                <button class="btn btn-primary" onclick="App.Router.navigate('home')" style="margin-top: 30px;">
+                    Вернуться к покупкам
+                </button>
+            </div>
+        `;
+    },
+
+    async showCart() {
+        App.UI.updateBreadcrumb([
+            { text: 'Главная', link: 'home' },
+            { text: 'Корзина', link: 'cart' }
+        ]);
+
+        const content = document.getElementById('app-content');
+        
+        try {
+            App.UI.showLoader();
+            const cartData = await API.getCart();
+            
+            if (!cartData.items || cartData.items.length === 0) {
+                content.innerHTML = `
+                    <div class="text-center">
+                        <h1>Корзина пуста</h1>
+                        <i class="fas fa-shopping-cart" style="font-size: 64px; color: #ccc; margin: 40px 0;"></i>
+                        <p>Добавьте товары в корзину, чтобы продолжить покупки</p>
+                        <button class="btn btn-primary" onclick="App.Router.navigate('home')">
+                            Перейти к покупкам
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            content.innerHTML = `
+                <h1>Корзина</h1>
+                <div class="cart-page">
+                    <div class="cart-items-list">
+                        ${cartData.items.map(item => `
+                            <div class="cart-item-full">
+                                <img src="${API.getProductImageUrl(item.image_url)}" alt="${item.name}" class="cart-item-image">
+                                <div class="cart-item-details">
+                                    <h3>${item.name}</h3>
+                                    <p class="cart-item-brand">${item.brand_name || ''}</p>
+                                    <p class="cart-item-sku">Артикул: ${item.sku}</p>
+                                </div>
+                                <div class="cart-item-controls">
+                                    <div class="quantity-controls">
+                                        <button class="quantity-btn" onclick="App.Cart.updateQuantity('${item.id}', ${item.quantity - 1})">-</button>
+                                        <span class="quantity-value">${item.quantity}</span>
+                                        <button class="quantity-btn" onclick="App.Cart.updateQuantity('${item.id}', ${item.quantity + 1})">+</button>
+                                    </div>
+                                    <div class="cart-item-price">${App.UI.formatPrice(item.price * item.quantity)}</div>
+                                    <button class="btn btn-icon" onclick="App.Cart.removeItem('${item.id}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <div class="cart-summary-page">
+                        <h3>Итого</h3>
+                        <div class="summary-row">
+                            <span>Товаров: ${cartData.summary.totalQuantity}</span>
+                        </div>
+                        <div class="summary-row">
+                            <span>Сумма: ${App.UI.formatPrice(cartData.summary.subtotal)}</span>
+                        </div>
+                        <div class="summary-row">
+                            <span>Доставка: ${cartData.summary.delivery > 0 ? App.UI.formatPrice(cartData.summary.delivery) : 'Бесплатно'}</span>
+                        </div>
+                        <div class="summary-row total">
+                            <span>Итого: ${App.UI.formatPrice(cartData.summary.total)}</span>
+                        </div>
+                        <button class="btn btn-primary" onclick="App.Router.navigate('checkout')" style="width: 100%; margin-top: 20px;">
+                            Оформить заказ
+                        </button>
+                        <button class="btn btn-secondary" onclick="App.Cart.clearCart()" style="width: 100%; margin-top: 10px;">
+                            Очистить корзину
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+        } catch (error) {
+            content.innerHTML = '<p class="text-center">Ошибка загрузки корзины</p>';
+            console.error('Error loading cart page:', error);
+        } finally {
+            App.UI.hideLoader();
+        }
+    },
+
+    async showFavorites() {
+        App.UI.updateBreadcrumb([
+            { text: 'Главная', link: 'home' },
+            { text: 'Избранное', link: 'favorites' }
+        ]);
+
+        if (!App.state.currentUser) {
+            const content = document.getElementById('app-content');
+            content.innerHTML = `
+                <div class="text-center">
+                    <h1>Избранное</h1>
+                    <p>Войдите в аккаунт, чтобы просмотреть избранные товары</p>
+                    <button class="btn btn-primary" onclick="App.openModal('authModal')">
+                        Войти в аккаунт
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        const content = document.getElementById('app-content');
+        
+        try {
+            App.UI.showLoader();
+            const favorites = await API.getFavorites();
+            
+            if (favorites.length === 0) {
+                content.innerHTML = `
+                    <div class="text-center">
+                        <h1>Избранное</h1>
+                        <i class="fas fa-heart" style="font-size: 64px; color: #ccc; margin: 40px 0;"></i>
+                        <p>У вас пока нет избранных товаров</p>
+                        <button class="btn btn-primary" onclick="App.Router.navigate('home')">
+                            Перейти к покупкам
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            content.innerHTML = `
+                <h1>Избранные товары</h1>
+                <div class="products-grid">
+                    ${favorites.map(product => this.renderProductCard(product)).join('')}
+                </div>
+            `;
+            
+        } catch (error) {
+            content.innerHTML = '<p class="text-center">Ошибка загрузки избранного</p>';
+            console.error('Error loading favorites:', error);
+        } finally {
+            App.UI.hideLoader();
+        }
+    },
+
+    async showOrders() {
+        App.UI.updateBreadcrumb([
+            { text: 'Главная', link: 'home' },
+            { text: 'Мои заказы', link: 'orders' }
+        ]);
+
+        if (!App.state.currentUser) {
+            const content = document.getElementById('app-content');
+            content.innerHTML = `
+                <div class="text-center">
+                    <h1>Мои заказы</h1>
+                    <p>Войдите в аккаунт, чтобы просмотреть свои заказы</p>
+                    <button class="btn btn-primary" onclick="App.openModal('authModal')">
+                        Войти в аккаунт
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        const content = document.getElementById('app-content');
+        
+        try {
+            App.UI.showLoader();
+            
+            // Заглушка для заказов (API метод может не быть реализован)
+            content.innerHTML = `
+                <h1>Мои заказы</h1>
+                <div class="text-center" style="margin-top: 60px;">
+                    <i class="fas fa-box" style="font-size: 64px; color: #ccc; margin-bottom: 30px;"></i>
+                    <p>У вас пока нет заказов</p>
+                    <p>Когда вы сделаете первый заказ, он появится здесь</p>
+                    <button class="btn btn-primary" onclick="App.Router.navigate('home')">
+                        Перейти к покупкам
+                    </button>
+                </div>
+            `;
+            
+        } catch (error) {
+            content.innerHTML = '<p class="text-center">Ошибка загрузки заказов</p>';
+            console.error('Error loading orders:', error);
+        } finally {
+            App.UI.hideLoader();
+        }
+    },
+
     async showCategory(category, subcategory = null) {
         try {
             App.UI.showLoader();
@@ -805,6 +1231,117 @@ App.Pages = {
             App.UI.showNotification('Категория не найдена', 'error');
             App.Router.navigate('home');
             console.error('Error loading category:', error);
+        } finally {
+            App.UI.hideLoader();
+        }
+    },
+
+    async showAdmin() {
+        App.UI.updateBreadcrumb([
+            { text: 'Главная', link: 'home' },
+            { text: 'Администрирование', link: 'admin' }
+        ]);
+
+        if (!App.state.currentUser || App.state.currentUser.role !== 'admin') {
+            const content = document.getElementById('app-content');
+            content.innerHTML = `
+                <div class="text-center">
+                    <h1>Доступ запрещен</h1>
+                    <p>У вас нет прав для доступа к административной панели</p>
+                    <button class="btn btn-primary" onclick="App.Router.navigate('home')">
+                        Вернуться на главную
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        const content = document.getElementById('app-content');
+        
+        try {
+            App.UI.showLoader();
+            
+            content.innerHTML = `
+                <h1>Административная панель</h1>
+                
+                <div class="admin-dashboard">
+                    <div class="dashboard-card">
+                        <i class="fas fa-box"></i>
+                        <h3>Заказы</h3>
+                        <p>0</p>
+                    </div>
+                    <div class="dashboard-card">
+                        <i class="fas fa-users"></i>
+                        <h3>Пользователи</h3>
+                        <p>2</p>
+                    </div>
+                    <div class="dashboard-card">
+                        <i class="fas fa-music"></i>
+                        <h3>Товары</h3>
+                        <p>12</p>
+                    </div>
+                    <div class="dashboard-card">
+                        <i class="fas fa-chart-line"></i>
+                        <h3>Продажи</h3>
+                        <p>0 ₽</p>
+                    </div>
+                </div>
+
+                <div class="text-center" style="margin-top: 40px;">
+                    <p>Административные функции находятся в разработке</p>
+                    <button class="btn btn-primary" onclick="App.Router.navigate('home')">
+                        Вернуться на главную
+                    </button>
+                </div>
+            `;
+            
+        } catch (error) {
+            content.innerHTML = '<p class="text-center">Ошибка загрузки административной панели</p>';
+            console.error('Error loading admin panel:', error);
+        } finally {
+            App.UI.hideLoader();
+        }
+    },
+
+    async showSale() {
+        App.UI.updateBreadcrumb([
+            { text: 'Главная', link: 'home' },
+            { text: 'Распродажа', link: 'sale' }
+        ]);
+
+        const content = document.getElementById('app-content');
+        
+        try {
+            App.UI.showLoader();
+            
+            // Загружаем товары со скидкой (у которых есть old_price)
+            const response = await API.getProducts({ limit: 20 });
+            const saleProducts = response.products.filter(p => p.old_price && p.old_price > p.price);
+            
+            content.innerHTML = `
+                <div class="section-header">
+                    <h1 class="section-title">🔥 Распродажа</h1>
+                </div>
+                
+                ${saleProducts.length > 0 ? `
+                    <div class="products-grid">
+                        ${saleProducts.map(p => this.renderProductCard(p)).join('')}
+                    </div>
+                ` : `
+                    <div class="text-center" style="margin-top: 60px;">
+                        <i class="fas fa-tags" style="font-size: 64px; color: #ccc; margin-bottom: 30px;"></i>
+                        <h2>Скоро появятся новые скидки!</h2>
+                        <p>Следите за обновлениями, чтобы не пропустить выгодные предложения</p>
+                        <button class="btn btn-primary" onclick="App.Router.navigate('home')">
+                            Перейти к каталогу
+                        </button>
+                    </div>
+                `}
+            `;
+            
+        } catch (error) {
+            content.innerHTML = '<p class="text-center">Ошибка загрузки страницы распродажи</p>';
+            console.error('Error loading sale page:', error);
         } finally {
             App.UI.hideLoader();
         }
