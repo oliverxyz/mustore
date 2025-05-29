@@ -6,16 +6,23 @@ const API = window.MuStoreAPI;
 
 const App = {
     // Инициализация приложения
-    init() {
-        // Инициализируем подмодули
-        this.Router.init();
-        this.Auth.init();
-        this.Cart.init();
-        this.Favorites.init();
-        this.UI.init();
-        
-        // Загружаем начальную страницу
-        this.Router.handleRoute();
+    async init() {
+        try {
+            // Инициализируем подмодули
+            this.Router.init();
+            this.Auth.init();
+            await this.Cart.init();
+            await this.Favorites.init();
+            this.UI.init();
+            
+            // Загружаем начальную страницу
+            this.Router.handleRoute();
+            
+            console.log('✅ App initialized successfully');
+        } catch (error) {
+            console.error('❌ App initialization failed:', error);
+            this.UI.showNotification('Ошибка инициализации приложения', 'error');
+        }
     },
 
     // Глобальное состояние приложения
@@ -23,7 +30,6 @@ const App = {
         currentUser: null,
         cart: [],
         favorites: [],
-        products: [],
         categories: [],
         filters: {
             category: null,
@@ -95,7 +101,6 @@ App.Router = {
 
     handleRoute() {
         const hash = window.location.hash.slice(1) || 'home';
-        const [routePath, ...params] = hash.split('/');
         
         // Поиск подходящего маршрута
         let routeFound = false;
@@ -148,7 +153,6 @@ App.Auth = {
         // Проверяем сохраненный токен
         const token = localStorage.getItem('authToken');
         if (token) {
-            // Проверяем валидность токена
             this.checkAuth();
         }
 
@@ -177,6 +181,16 @@ App.Auth = {
             e.preventDefault();
             this.logout();
         });
+
+        document.getElementById('ordersBtn').addEventListener('click', (e) => {
+            e.preventDefault();
+            App.Router.navigate('orders');
+        });
+
+        document.getElementById('adminBtn').addEventListener('click', (e) => {
+            e.preventDefault();
+            App.Router.navigate('admin');
+        });
     },
 
     async checkAuth() {
@@ -192,13 +206,19 @@ App.Auth = {
         } catch (error) {
             // Токен невалидный, очищаем
             API.logout();
+            App.state.currentUser = null;
+            this.updateUIForUser();
         }
     },
 
     async login() {
         const email = document.getElementById('loginEmail').value;
         const password = document.getElementById('loginPassword').value;
-        const rememberMe = document.getElementById('rememberMe').checked;
+
+        if (!email || !password) {
+            App.UI.showNotification('Заполните все поля', 'error');
+            return;
+        }
 
         try {
             App.UI.showLoader();
@@ -211,21 +231,13 @@ App.Auth = {
                 role: response.user.role
             };
 
-            if (rememberMe) {
-                localStorage.setItem('currentUser', JSON.stringify(App.state.currentUser));
-            } else {
-                sessionStorage.setItem('currentUser', JSON.stringify(App.state.currentUser));
-            }
-
             this.updateUIForUser();
             App.closeModal('authModal');
             App.UI.showNotification(`Добро пожаловать, ${App.state.currentUser.name}!`, 'success');
             
-            // Перенаправление в админку для администраторов
-            if (response.user.role === 'admin') {
-                App.Router.navigate('admin');
-            }
-
+            // Очищаем форму
+            document.getElementById('loginForm').reset();
+            
             // Загружаем корзину и избранное после входа
             await App.Cart.loadCart();
             await App.Favorites.loadFavorites();
@@ -241,6 +253,11 @@ App.Auth = {
         const email = document.getElementById('registerEmail').value;
         const password = document.getElementById('registerPassword').value;
         const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
+
+        if (!name || !email || !password || !passwordConfirm) {
+            App.UI.showNotification('Заполните все поля', 'error');
+            return;
+        }
 
         if (password !== passwordConfirm) {
             App.UI.showNotification('Пароли не совпадают', 'error');
@@ -266,11 +283,12 @@ App.Auth = {
                 role: response.user.role
             };
 
-            localStorage.setItem('currentUser', JSON.stringify(App.state.currentUser));
-
             this.updateUIForUser();
             App.closeModal('authModal');
             App.UI.showNotification('Регистрация успешна!', 'success');
+            
+            // Очищаем форму
+            document.getElementById('registerForm').reset();
         } catch (error) {
             App.UI.showNotification(error.message || 'Ошибка при регистрации', 'error');
         } finally {
@@ -282,12 +300,14 @@ App.Auth = {
         API.logout();
         App.state.currentUser = null;
         App.state.favorites = [];
+        App.state.cart = [];
         this.updateUIForUser();
+        App.Cart.updateUI();
+        App.Favorites.updateUI();
         App.Router.navigate('home');
         App.UI.showNotification('Вы вышли из аккаунта', 'success');
     },
 
-    // Остальные методы остаются без изменений
     updateUIForUser() {
         const loginBtn = document.getElementById('loginBtn');
         const userDisplay = document.getElementById('userDisplay');
@@ -328,6 +348,7 @@ App.Auth = {
             document.getElementById('registerForm').classList.add('active');
         }
     },
+
     fillDemo(type) {
         if (type === 'user') {
             document.getElementById('loginEmail').value = 'user@example.com';
@@ -355,20 +376,12 @@ App.Cart = {
     async loadCart() {
         try {
             const cartData = await API.getCart();
-            App.state.cart = cartData.items.map(item => ({
-                id: item.product_id,
-                cartItemId: item.id,
-                name: item.name,
-                brand: item.brand_name,
-                price: parseFloat(item.price),
-                oldPrice: item.old_price ? parseFloat(item.old_price) : null,
-                quantity: item.quantity,
-                image: item.image_url || '/images/placeholder.jpg',
-                availableQuantity: item.available_quantity
-            }));
+            App.state.cart = cartData.items || [];
             this.updateUI();
         } catch (error) {
             console.error('Error loading cart:', error);
+            App.state.cart = [];
+            this.updateUI();
         }
     },
 
@@ -390,6 +403,7 @@ App.Cart = {
             await API.removeFromCart(cartItemId);
             await this.loadCart();
             this.renderCart();
+            App.UI.showNotification('Товар удален из корзины', 'success');
         } catch (error) {
             App.UI.showNotification(error.message || 'Ошибка при удалении из корзины', 'error');
         }
@@ -409,13 +423,26 @@ App.Cart = {
         }
     },
 
-    // Остальные методы обновляются аналогично
-    getTotal() { /* ... */ },
-    getCount() { /* ... */ },
-    updateUI() { /* ... */ },
-    formatPrice(price) { /* ... */ },
-    renderCart() { 
-        // Обновляем рендеринг с учетом cartItemId
+    getTotal() {
+        return App.state.cart.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
+    },
+
+    getCount() {
+        return App.state.cart.reduce((sum, item) => sum + item.quantity, 0);
+    },
+
+    updateUI() {
+        const cartCount = document.getElementById('cartCount');
+        const cartTotal = document.getElementById('cartTotal');
+        
+        const count = this.getCount();
+        const total = this.getTotal();
+        
+        cartCount.textContent = count;
+        cartTotal.textContent = App.UI.formatPrice(total);
+    },
+
+    renderCart() {
         const cartItems = document.getElementById('cartItems');
         const cartSummary = document.getElementById('cartSummary');
         
@@ -433,19 +460,19 @@ App.Cart = {
         } else {
             cartItems.innerHTML = App.state.cart.map(item => `
                 <div class="cart-item">
-                    <img src="${item.image}" alt="${item.name}" class="cart-item-image">
+                    <img src="${API.getProductImageUrl(item.image_url)}" alt="${item.name}" class="cart-item-image">
                     <div class="cart-item-info">
                         <div class="cart-item-name">${item.name}</div>
-                        <div class="cart-item-brand">${item.brand}</div>
+                        <div class="cart-item-brand">${item.brand_name || ''}</div>
                     </div>
                     <div class="cart-item-actions">
                         <div class="cart-item-price">${App.UI.formatPrice(item.price * item.quantity)}</div>
                         <div class="quantity-controls">
-                            <button class="quantity-btn" onclick="App.Cart.updateQuantity('${item.cartItemId}', ${item.quantity - 1})">-</button>
+                            <button class="quantity-btn" onclick="App.Cart.updateQuantity('${item.id}', ${item.quantity - 1})">-</button>
                             <span class="quantity-value">${item.quantity}</span>
-                            <button class="quantity-btn" onclick="App.Cart.updateQuantity('${item.cartItemId}', ${item.quantity + 1})">+</button>
+                            <button class="quantity-btn" onclick="App.Cart.updateQuantity('${item.id}', ${item.quantity + 1})">+</button>
                         </div>
-                        <button class="btn btn-icon" onclick="App.Cart.removeItem('${item.cartItemId}')">
+                        <button class="btn btn-icon" onclick="App.Cart.removeItem('${item.id}')">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
@@ -488,6 +515,8 @@ App.Favorites = {
             this.updateUI();
         } catch (error) {
             console.error('Error loading favorites:', error);
+            App.state.favorites = [];
+            this.updateUI();
         }
     },
 
@@ -572,7 +601,8 @@ App.UI = {
         return new Intl.NumberFormat('ru-RU', {
             style: 'currency',
             currency: 'RUB',
-            minimumFractionDigits: 0
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
         }).format(price);
     },
 
@@ -584,321 +614,12 @@ App.UI = {
             }
             return `<a href="#" data-link="${item.link}">${item.text}</a> <span>/</span>`;
         }).join(' ');
-    }
-};
-
-// ====================================
-// Модуль данных (имитация API)
-// ====================================
-
-App.Data = {
-    // Категории товаров
-    categories: {
-        'guitars': {
-            name: 'Гитары',
-            icon: '🎸',
-            subcategories: {
-                'acoustic': 'Акустические гитары',
-                'electric': 'Электрогитары',
-                'bass': 'Бас-гитары',
-                'classical': 'Классические гитары'
-            }
-        },
-        'keyboards': {
-            name: 'Клавишные',
-            icon: '🎹',
-            subcategories: {
-                'synthesizers': 'Синтезаторы',
-                'pianos': 'Цифровые пианино',
-                'midi': 'MIDI-клавиатуры'
-            }
-        },
-        'drums': {
-            name: 'Ударные',
-            icon: '🥁',
-            subcategories: {
-                'acoustic-drums': 'Акустические ударные',
-                'electronic-drums': 'Электронные ударные',
-                'percussion': 'Перкуссия'
-            }
-        },
-        'wind': {
-            name: 'Духовые',
-            icon: '🎺',
-            subcategories: {}
-        },
-        'studio': {
-            name: 'Студийное оборудование',
-            icon: '🎙️',
-            subcategories: {}
-        },
-        'accessories': {
-            name: 'Аксессуары',
-            icon: '🎵',
-            subcategories: {}
-        }
     },
 
-    // Продукты (расширенный список)
-    products: [
-        {
-            id: '1',
-            name: 'Yamaha F310',
-            brand: 'Yamaha',
-            category: 'guitars',
-            subcategory: 'acoustic',
-            price: 15990,
-            oldPrice: 18990,
-            image: 'https://images.unsplash.com/photo-1558098329-a11cff621064?w=400',
-            description: 'Классическая акустическая гитара для начинающих и опытных музыкантов.',
-            specifications: {
-                'Тип': 'Дредноут',
-                'Верхняя дека': 'Ель',
-                'Задняя дека и обечайки': 'Меранти',
-                'Гриф': 'Нато',
-                'Накладка грифа': 'Палисандр',
-                'Количество ладов': '20',
-                'Мензура': '634 мм'
-            },
-            featured: true,
-            isNew: false,
-            inStock: true
-        },
-        {
-            id: '2',
-            name: 'Fender Stratocaster Player',
-            brand: 'Fender',
-            category: 'guitars',
-            subcategory: 'electric',
-            price: 89990,
-            oldPrice: null,
-            image: 'https://images.unsplash.com/photo-1564186763535-ebb21ef5277f?w=400',
-            description: 'Легендарная электрогитара с классическим звучанием Fender.',
-            specifications: {
-                'Корпус': 'Ольха',
-                'Гриф': 'Клён',
-                'Накладка грифа': 'Клён',
-                'Количество ладов': '22',
-                'Звукосниматели': '3x Player Series Alnico 5 Strat Single-Coil',
-                'Бридж': 'Tremolo 2-точечный',
-                'Цвет': 'Sonic Red'
-            },
-            featured: true,
-            isNew: true,
-            inStock: true
-        },
-        {
-            id: '3',
-            name: 'Roland FP-30X',
-            brand: 'Roland',
-            category: 'keyboards',
-            subcategory: 'pianos',
-            price: 64990,
-            oldPrice: 69990,
-            image: 'https://images.unsplash.com/photo-1520523839897-bd0b52f945a0?w=400',
-            description: 'Портативное цифровое пианино с аутентичным звучанием и клавиатурой.',
-            specifications: {
-                'Клавиатура': '88 клавиш, PHA-4 Standard',
-                'Полифония': '256 голосов',
-                'Тембры': '56 тембров',
-                'Эффекты': 'Ambience, Brilliance',
-                'Записывающее устройство': 'SMF',
-                'Bluetooth': 'Да (MIDI, Audio)',
-                'Выходы': 'Наушники, линейный выход'
-            },
-            featured: true,
-            isNew: false,
-            inStock: true
-        },
-        {
-            id: '4',
-            name: 'Pearl Export Series',
-            brand: 'Pearl',
-            category: 'drums',
-            subcategory: 'acoustic-drums',
-            price: 119990,
-            oldPrice: null,
-            image: 'https://images.unsplash.com/photo-1519892300165-cb5542fb47c7?w=400',
-            description: 'Профессиональная барабанная установка для сцены и студии.',
-            specifications: {
-                'Бас-барабан': '22"x18"',
-                'Том-томы': '10"x7", 12"x8"',
-                'Напольный том': '16"x16"',
-                'Малый барабан': '14"x5.5"',
-                'Материал': 'Тополь/Красное дерево',
-                'Фурнитура': 'Хром',
-                'Цвет': 'Jet Black'
-            },
-            featured: true,
-            isNew: true,
-            inStock: true
-        },
-        {
-            id: '5',
-            name: 'Shure SM58',
-            brand: 'Shure',
-            category: 'studio',
-            price: 8990,
-            oldPrice: null,
-            image: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=400',
-            description: 'Легендарный вокальный микрофон для сцены и студии.',
-            specifications: {
-                'Тип': 'Динамический',
-                'Диаграмма направленности': 'Кардиоида',
-                'Частотный диапазон': '50 - 15000 Гц',
-                'Чувствительность': '-54.5 дБВ/Па',
-                'Импеданс': '150 Ом',
-                'Разъем': 'XLR'
-            },
-            featured: false,
-            isNew: false,
-            inStock: true
-        },
-        {
-            id: '6',
-            name: 'Gibson Les Paul Standard',
-            brand: 'Gibson',
-            category: 'guitars',
-            subcategory: 'electric',
-            price: 249990,
-            oldPrice: null,
-            image: 'https://images.unsplash.com/photo-1550985616-10810253b84d?w=400',
-            description: 'Классическая электрогитара с мощным звучанием хамбакеров.',
-            specifications: {
-                'Корпус': 'Красное дерево',
-                'Топ': 'Клён AA',
-                'Гриф': 'Красное дерево',
-                'Накладка грифа': 'Палисандр',
-                'Звукосниматели': 'Burstbucker Pro',
-                'Бридж': 'Tune-o-matic',
-                'Цвет': 'Bourbon Burst'
-            },
-            featured: true,
-            isNew: false,
-            inStock: true
-        },
-        {
-            id: '7',
-            name: 'Yamaha YAS-280',
-            brand: 'Yamaha',
-            category: 'wind',
-            price: 89990,
-            oldPrice: 94990,
-            image: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=400',
-            description: 'Альт-саксофон для учащихся и любителей.',
-            specifications: {
-                'Строй': 'Eb',
-                'Корпус': 'Латунь',
-                'Покрытие': 'Золотой лак',
-                'Клапаны': 'Улучшенная механика',
-                'Мундштук': 'AS-4C',
-                'Кейс': 'В комплекте'
-            },
-            featured: false,
-            isNew: false,
-            inStock: true
-        },
-        {
-            id: '8',
-            name: 'Korg Kronos 2',
-            brand: 'Korg',
-            category: 'keyboards',
-            subcategory: 'synthesizers',
-            price: 299990,
-            oldPrice: null,
-            image: 'https://images.unsplash.com/photo-1563330232-57114bb0823c?w=400',
-            description: 'Профессиональная музыкальная рабочая станция.',
-            specifications: {
-                'Клавиатура': '88 клавиш, RH3',
-                'Движки синтеза': '9 типов',
-                'Полифония': 'До 400 голосов',
-                'Память': '62 ГБ SSD',
-                'Секвенсер': '16 треков MIDI + 16 аудио',
-                'Дисплей': '8" TouchView'
-            },
-            featured: true,
-            isNew: true,
-            inStock: false
-        }
-    ],
-
-    // Получение товаров с фильтрацией
-    async getProducts(filters = {}) {
-        // Имитация задержки API
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        let filtered = [...this.products];
-        
-        // Фильтр по категории
-        if (filters.category) {
-            filtered = filtered.filter(p => p.category === filters.category);
-        }
-        
-        // Фильтр по подкатегории
-        if (filters.subcategory) {
-            filtered = filtered.filter(p => p.subcategory === filters.subcategory);
-        }
-        
-        // Фильтр по бренду
-        if (filters.brands && filters.brands.length > 0) {
-            filtered = filtered.filter(p => filters.brands.includes(p.brand));
-        }
-        
-        // Фильтр по цене
-        if (filters.priceMin) {
-            filtered = filtered.filter(p => p.price >= filters.priceMin);
-        }
-        if (filters.priceMax) {
-            filtered = filtered.filter(p => p.price <= filters.priceMax);
-        }
-        
-        // Фильтр по наличию
-        if (filters.inStock) {
-            filtered = filtered.filter(p => p.inStock);
-        }
-        
-        // Фильтр по рекомендуемым
-        if (filters.featured) {
-            filtered = filtered.filter(p => p.featured);
-        }
-        
-        // Фильтр по новинкам
-        if (filters.isNew) {
-            filtered = filtered.filter(p => p.isNew);
-        }
-        
-        // Фильтр по скидкам
-        if (filters.sale) {
-            filtered = filtered.filter(p => p.oldPrice !== null);
-        }
-        
-        // Поиск
-        if (filters.search) {
-            const search = filters.search.toLowerCase();
-            filtered = filtered.filter(p => 
-                p.name.toLowerCase().includes(search) ||
-                p.brand.toLowerCase().includes(search) ||
-                p.description.toLowerCase().includes(search)
-            );
-        }
-        
-        return filtered;
-    },
-
-    // Получение товара по ID
-    async getProduct(id) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        return this.products.find(p => p.id === id);
-    },
-
-    // Получение уникальных брендов
-    getBrands(category = null) {
-        let products = this.products;
-        if (category) {
-            products = products.filter(p => p.category === category);
-        }
-        const brands = [...new Set(products.map(p => p.brand))];
-        return brands.sort();
+    // Обработка ошибок при загрузке изображений
+    handleImageError(img) {
+        img.src = '/images/placeholder.jpg';
+        img.onerror = null; // Предотвращаем бесконечный цикл
     }
 };
 
@@ -915,6 +636,8 @@ App.Pages = {
         const content = document.getElementById('app-content');
         
         try {
+            App.UI.showLoader();
+            
             // Загружаем категории
             const categories = await API.getCategories();
             
@@ -951,23 +674,35 @@ App.Pages = {
             `;
 
             // Загружаем рекомендуемые товары
-            const featuredResponse = await API.getProducts({ featured: true, limit: 4 });
-            document.getElementById('featuredProducts').innerHTML = 
-                featuredResponse.products.map(p => this.renderProductCard(p)).join('');
+            try {
+                const featuredResponse = await API.getProducts({ featured: 'true', limit: 4 });
+                document.getElementById('featuredProducts').innerHTML = 
+                    featuredResponse.products.map(p => this.renderProductCard(p)).join('');
+            } catch (error) {
+                document.getElementById('featuredProducts').innerHTML = '<p class="text-center">Ошибка загрузки товаров</p>';
+            }
 
             // Загружаем новинки
-            const newResponse = await API.getProducts({ isNew: true, limit: 4 });
-            document.getElementById('newProducts').innerHTML = 
-                newResponse.products.map(p => this.renderProductCard(p)).join('');
+            try {
+                const newResponse = await API.getProducts({ isNew: 'true', limit: 4 });
+                document.getElementById('newProducts').innerHTML = 
+                    newResponse.products.map(p => this.renderProductCard(p)).join('');
+            } catch (error) {
+                document.getElementById('newProducts').innerHTML = '<p class="text-center">Ошибка загрузки товаров</p>';
+            }
                 
         } catch (error) {
             content.innerHTML = '<p class="text-center">Ошибка загрузки данных</p>';
             console.error('Error loading home page:', error);
+        } finally {
+            App.UI.hideLoader();
         }
     },
 
     async showCategory(category, subcategory = null) {
         try {
+            App.UI.showLoader();
+            
             const categoryData = await API.getCategory(category);
             
             const breadcrumbItems = [
@@ -997,6 +732,7 @@ App.Pages = {
                     <aside class="filters-sidebar" id="filtersSidebar">
                         <h3>Фильтры</h3>
                         
+                        ${brands.length > 0 ? `
                         <div class="filter-group">
                             <h4>Бренд</h4>
                             <div id="brandFilters">
@@ -1008,6 +744,7 @@ App.Pages = {
                                 `).join('')}
                             </div>
                         </div>
+                        ` : ''}
                         
                         <div class="filter-group">
                             <h4>Цена</h4>
@@ -1027,10 +764,10 @@ App.Pages = {
                         </div>
                         
                         <div class="filters-actions">
-                            <button class="btn btn-primary" onclick="App.Pages.applyFilters()">
+                            <button class="btn btn-primary" onclick="App.Pages.applyFilters('${category}', '${subcategory || ''}')">
                                 Применить
                             </button>
-                            <button class="btn btn-secondary" onclick="App.Pages.resetFilters()">
+                            <button class="btn btn-secondary" onclick="App.Pages.resetFilters('${category}', '${subcategory || ''}')">
                                 Сбросить
                             </button>
                         </div>
@@ -1065,13 +802,67 @@ App.Pages = {
                 productsContainer.innerHTML = response.products.map(p => this.renderProductCard(p)).join('');
             }
         } catch (error) {
+            App.UI.showNotification('Категория не найдена', 'error');
             App.Router.navigate('home');
             console.error('Error loading category:', error);
+        } finally {
+            App.UI.hideLoader();
         }
+    },
+
+    async applyFilters(category, subcategory) {
+        try {
+            App.UI.showLoader();
+            
+            const filters = { category };
+            if (subcategory) filters.subcategory = subcategory;
+            
+            // Brand filters
+            const brandFilters = document.querySelectorAll('.brand-filter:checked');
+            if (brandFilters.length > 0) {
+                filters.brands = Array.from(brandFilters).map(input => input.value).join(',');
+            }
+            
+            // Price filters
+            const priceMin = document.getElementById('priceMin').value;
+            const priceMax = document.getElementById('priceMax').value;
+            if (priceMin) filters.priceMin = priceMin;
+            if (priceMax) filters.priceMax = priceMax;
+            
+            // Stock filter
+            if (document.getElementById('inStockFilter').checked) {
+                filters.inStock = 'true';
+            }
+            
+            const response = await API.getProducts(filters);
+            const productsContainer = document.getElementById('categoryProducts');
+            
+            if (response.products.length === 0) {
+                productsContainer.innerHTML = '<p class="text-center">Товары не найдены</p>';
+            } else {
+                productsContainer.innerHTML = response.products.map(p => this.renderProductCard(p)).join('');
+            }
+        } catch (error) {
+            App.UI.showNotification('Ошибка при применении фильтров', 'error');
+        } finally {
+            App.UI.hideLoader();
+        }
+    },
+
+    async resetFilters(category, subcategory) {
+        // Сброс формы фильтров
+        document.querySelectorAll('.brand-filter').forEach(input => input.checked = false);
+        document.getElementById('priceMin').value = '';
+        document.getElementById('priceMax').value = '';
+        document.getElementById('inStockFilter').checked = false;
+        
+        // Применение сброшенных фильтров
+        this.applyFilters(category, subcategory);
     },
 
     async showProduct(productId) {
         try {
+            App.UI.showLoader();
             const product = await API.getProduct(productId);
             
             const modalTitle = document.getElementById('productModalTitle');
@@ -1080,21 +871,30 @@ App.Pages = {
             modalTitle.textContent = product.name;
             
             // Получаем похожие товары
-            const similarProducts = await API.getSimilarProducts(product.id);
+            let similarProducts = [];
+            try {
+                similarProducts = await API.getSimilarProducts(product.id);
+            } catch (error) {
+                console.error('Error loading similar products:', error);
+            }
             
             modalContent.innerHTML = `
                 <div class="product-detail">
                     <div class="product-gallery">
-                        <img src="${product.images[0]?.image_url || '/images/placeholder.jpg'}" 
-                             alt="${product.name}" class="product-main-image" id="mainImage">
+                        <img src="${API.getProductImageUrl(product.images[0]?.image_url)}" 
+                             alt="${product.name}" class="product-main-image" id="mainImage"
+                             onerror="App.UI.handleImageError(this)">
+                        ${product.images.length > 1 ? `
                         <div class="product-thumbnails">
                             ${product.images.map((img, index) => `
-                                <img src="${img.thumbnail_url || img.image_url}" 
+                                <img src="${API.getProductImageUrl(img.thumbnail_url || img.image_url)}" 
                                      alt="${product.name}" 
                                      class="product-thumbnail ${index === 0 ? 'active' : ''}" 
-                                     onclick="App.Pages.changeProductImage('${img.image_url}', this)">
+                                     onclick="App.Pages.changeProductImage('${API.getProductImageUrl(img.image_url)}', this)"
+                                     onerror="App.UI.handleImageError(this)">
                             `).join('')}
                         </div>
+                        ` : ''}
                     </div>
                     
                     <div class="product-details">
@@ -1117,15 +917,16 @@ App.Pages = {
                         <div class="product-actions">
                             <button class="btn btn-primary" onclick="App.Cart.addItem({
                                 id: '${product.id}',
-                                name: '${product.name}',
+                                name: '${product.name.replace(/'/g, "\\'")}',
                                 brand: '${product.brand_name}',
                                 price: ${product.price},
-                                image: '${product.images[0]?.image_url || '/images/placeholder.jpg'}'
+                                image: '${API.getProductImageUrl(product.images[0]?.image_url)}'
                             })" ${product.stock_quantity <= 0 ? 'disabled' : ''}>
                                 <i class="fas fa-shopping-cart"></i> Добавить в корзину
                             </button>
                             <button class="btn btn-icon ${App.Favorites.isFavorite(product.id) ? 'active' : ''}" 
-                                    onclick="App.Favorites.toggle('${product.id}'); this.classList.toggle('active')">
+                                    onclick="App.Favorites.toggle('${product.id}'); this.classList.toggle('active')"
+                                    id="favoriteBtn">
                                 <i class="fas fa-heart"></i>
                             </button>
                         </div>
@@ -1175,25 +976,39 @@ App.Pages = {
         } catch (error) {
             App.UI.showNotification('Ошибка при загрузке товара', 'error');
             console.error('Error loading product:', error);
+        } finally {
+            App.UI.hideLoader();
         }
     },
 
-    // Обновляем renderProductCard для работы с данными из API
+    changeProductImage(imageUrl, thumbnail) {
+        document.getElementById('mainImage').src = imageUrl;
+        
+        // Обновляем активный thumbnail
+        document.querySelectorAll('.product-thumbnail').forEach(thumb => {
+            thumb.classList.remove('active');
+        });
+        thumbnail.classList.add('active');
+    },
+
     renderProductCard(product) {
         const discount = product.old_price ? 
             Math.round((1 - product.price / product.old_price) * 100) : 0;
         
         const primaryImage = product.primary_image || 
                            (product.images && product.images[0]?.image_url) || 
-                           '/images/placeholder.jpg';
+                           '';
         
         return `
             <div class="product-card" onclick="App.Pages.showProduct('${product.id}')">
                 ${product.is_new ? '<span class="product-badge">Новинка</span>' : ''}
                 ${discount > 0 ? `<span class="product-badge sale">-${discount}%</span>` : ''}
-                <img src="${primaryImage}" alt="${product.name}" class="product-image">
+                <img src="${API.getProductImageUrl(primaryImage)}" 
+                     alt="${product.name}" 
+                     class="product-image"
+                     onerror="App.UI.handleImageError(this)">
                 <div class="product-info">
-                    <div class="product-brand">${product.brand_name}</div>
+                    <div class="product-brand">${product.brand_name || ''}</div>
                     <div class="product-name">${product.name}</div>
                     <div class="product-price">
                         <span class="price-current">${App.UI.formatPrice(product.price)}</span>
@@ -1203,10 +1018,10 @@ App.Pages = {
                         <button class="btn btn-primary" 
                                 onclick="event.stopPropagation(); App.Cart.addItem({
                                     id: '${product.id}',
-                                    name: '${product.name}',
+                                    name: '${product.name.replace(/'/g, "\\'")}',
                                     brand: '${product.brand_name}',
                                     price: ${product.price},
-                                    image: '${primaryImage}'
+                                    image: '${API.getProductImageUrl(primaryImage)}'
                                 })"
                                 ${product.stock_quantity <= 0 ? 'disabled' : ''}>
                             <i class="fas fa-shopping-cart"></i> 
@@ -1220,6 +1035,130 @@ App.Pages = {
                 </div>
             </div>
         `;
+    },
+
+    async showSearch() {
+        App.UI.updateBreadcrumb([
+            { text: 'Главная', link: 'home' },
+            { text: 'Поиск', link: 'search' }
+        ]);
+
+        const content = document.getElementById('app-content');
+        const searchQuery = App.state.filters.search;
+
+        if (!searchQuery) {
+            content.innerHTML = `
+                <div class="text-center">
+                    <h1>Поиск</h1>
+                    <p>Введите запрос в строку поиска</p>
+                </div>
+            `;
+            return;
+        }
+
+        try {
+            App.UI.showLoader();
+            
+            content.innerHTML = `
+                <h1>Результаты поиска: "${searchQuery}"</h1>
+                <div class="products-grid" id="searchResults">
+                    <div class="text-center"><div class="loader-spinner"></div></div>
+                </div>
+            `;
+
+            const response = await API.getProducts({ search: searchQuery });
+            const resultsContainer = document.getElementById('searchResults');
+            
+            if (response.products.length === 0) {
+                resultsContainer.innerHTML = '<p class="text-center">По вашему запросу ничего не найдено</p>';
+            } else {
+                resultsContainer.innerHTML = response.products.map(p => this.renderProductCard(p)).join('');
+            }
+        } catch (error) {
+            content.innerHTML = '<p class="text-center">Ошибка поиска</p>';
+            console.error('Error in search:', error);
+        } finally {
+            App.UI.hideLoader();
+        }
+    },
+
+    showInfo(page) {
+        App.UI.updateBreadcrumb([
+            { text: 'Главная', link: 'home' },
+            { text: this.getInfoPageTitle(page), link: page }
+        ]);
+
+        const content = document.getElementById('app-content');
+        content.innerHTML = this.getInfoPageContent(page);
+    },
+
+    getInfoPageTitle(page) {
+        const titles = {
+            'about': 'О нас',
+            'delivery': 'Доставка и оплата',
+            'returns': 'Возврат и обмен',
+            'warranty': 'Гарантия',
+            'service': 'Сервисный центр',
+            'advantages': 'Наши преимущества',
+            'reviews': 'Отзывы клиентов',
+            'careers': 'Вакансии'
+        };
+        return titles[page] || 'Информация';
+    },
+
+    getInfoPageContent(page) {
+        const content = {
+            'about': `
+                <div class="info-page">
+                    <h1>О нас</h1>
+                    <p>MuStore - это ведущий магазин музыкальных инструментов в Нижнем Новгороде. Мы работаем на рынке уже более 10 лет и предлагаем широкий ассортимент качественных инструментов для музыкантов любого уровня.</p>
+                    <h2>Наша миссия</h2>
+                    <p>Мы стремимся сделать музыку доступной для каждого, предлагая инструменты высокого качества по доступным ценам.</p>
+                    <h2>Почему выбирают нас</h2>
+                    <ul>
+                        <li>Широкий ассортимент инструментов</li>
+                        <li>Консультации профессиональных музыкантов</li>
+                        <li>Гарантия на все товары</li>
+                        <li>Быстрая доставка</li>
+                        <li>Сервисное обслуживание</li>
+                    </ul>
+                </div>
+            `,
+            'delivery': `
+                <div class="info-page">
+                    <h1>Доставка и оплата</h1>
+                    <h2>Способы доставки</h2>
+                    <ul>
+                        <li><strong>Самовывоз</strong> - бесплатно из нашего магазина</li>
+                        <li><strong>Доставка по городу</strong> - 300₽ (бесплатно при заказе от 5000₽)</li>
+                        <li><strong>Доставка по России</strong> - стоимость рассчитывается индивидуально</li>
+                    </ul>
+                    <h2>Способы оплаты</h2>
+                    <ul>
+                        <li>Наличными при получении</li>
+                        <li>Банковской картой при получении</li>
+                        <li>Онлайн оплата на сайте</li>
+                        <li>Безналичный расчет для юридических лиц</li>
+                    </ul>
+                </div>
+            `,
+            'returns': `
+                <div class="info-page">
+                    <h1>Возврат и обмен</h1>
+                    <p>Мы гарантируем возможность возврата или обмена товара в течение 14 дней с момента покупки.</p>
+                    <h2>Условия возврата</h2>
+                    <ul>
+                        <li>Товар должен быть в оригинальной упаковке</li>
+                        <li>Отсутствие следов использования</li>
+                        <li>Наличие чека или документа об оплате</li>
+                        <li>Сохранность всех комплектующих</li>
+                    </ul>
+                    <p>Возврат денежных средств осуществляется в течение 10 рабочих дней.</p>
+                </div>
+            `
+        };
+        
+        return content[page] || '<div class="info-page"><h1>Страница не найдена</h1></div>';
     }
 };
 
@@ -1230,9 +1169,4 @@ App.Pages = {
 document.addEventListener('DOMContentLoaded', () => {
     // Инициализируем приложение
     App.init();
-    
-    // Проверяем авторизацию при загрузке
-    if (localStorage.getItem('authToken')) {
-        App.Auth.checkAuth();
-    }
 });

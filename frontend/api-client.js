@@ -3,7 +3,19 @@
 // Модуль для работы с backend API
 // =============================================
 
-const API_BASE_URL = 'http://localhost:3001/api';
+// Определяем правильный базовый URL для API
+const API_BASE_URL = (() => {
+    const hostname = window.location.hostname;
+    const port = window.location.port;
+    
+    // Если мы на порту 8080 (ручная разработка) - идем напрямую к backend
+    if (port === '8080' || hostname !== 'localhost') {
+        return 'http://localhost:3001/api';
+    }
+    
+    // Если через Docker (localhost:80) - идем через Nginx
+    return '/api';
+})();
 
 // Класс для работы с API
 class ApiClient {
@@ -30,11 +42,15 @@ class ApiClient {
         const config = {
             ...options,
             headers: {
-                'Content-Type': 'application/json',
                 'X-Session-ID': this.sessionId,
                 ...options.headers,
             },
         };
+
+        // Добавляем Content-Type только если это не FormData
+        if (!(options.body instanceof FormData)) {
+            config.headers['Content-Type'] = 'application/json';
+        }
 
         // Добавляем токен авторизации, если есть
         if (this.token) {
@@ -44,13 +60,23 @@ class ApiClient {
         try {
             const response = await fetch(url, config);
             
+            // Если ответ не JSON, возвращаем текст
+            const contentType = response.headers.get('content-type');
+            let data;
+            
+            if (contentType && contentType.includes('application/json')) {
+                data = await response.json();
+            } else {
+                data = await response.text();
+            }
+            
             // Обработка ошибок
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || `HTTP error! status: ${response.status}`);
+                const errorMessage = data.error || data || `HTTP error! status: ${response.status}`;
+                throw new Error(errorMessage);
             }
 
-            return await response.json();
+            return data;
         } catch (error) {
             console.error('API request error:', error);
             throw error;
@@ -135,7 +161,7 @@ class ApiClient {
         const params = new URLSearchParams();
         
         Object.keys(filters).forEach(key => {
-            if (filters[key] !== null && filters[key] !== undefined) {
+            if (filters[key] !== null && filters[key] !== undefined && filters[key] !== '') {
                 if (Array.isArray(filters[key])) {
                     params.append(key, filters[key].join(','));
                 } else {
@@ -144,7 +170,10 @@ class ApiClient {
             }
         });
 
-        return await this.request(`/products?${params.toString()}`);
+        const queryString = params.toString();
+        const endpoint = queryString ? `/products?${queryString}` : '/products';
+        
+        return await this.request(endpoint);
     }
 
     async getProduct(identifier) {
@@ -210,55 +239,6 @@ class ApiClient {
         });
     }
 
-     // =============================================
-    // Методы для работы с категориями
-    // =============================================
-
-    async getCategories() {
-        return await this.request('/categories');
-    }
-
-    async getCategory(slug) {
-        return await this.request(`/categories/${slug}`);
-    }
-
-    // =============================================
-    // Методы для работы с брендами
-    // =============================================
-
-    async getBrands(category = null) {
-        const params = category ? `?category=${category}` : '';
-        return await this.request(`/brands${params}`);
-    }
-
-    // =============================================
-    // Методы для работы с товарами
-    // =============================================
-
-    async getProducts(filters = {}) {
-        const params = new URLSearchParams();
-        
-        Object.keys(filters).forEach(key => {
-            if (filters[key] !== null && filters[key] !== undefined) {
-                if (Array.isArray(filters[key])) {
-                    params.append(key, filters[key].join(','));
-                } else {
-                    params.append(key, filters[key]);
-                }
-            }
-        });
-
-        return await this.request(`/products?${params.toString()}`);
-    }
-
-    async getProduct(identifier) {
-        return await this.request(`/products/${identifier}`);
-    }
-
-    async getSimilarProducts(productId) {
-        return await this.request(`/products/${productId}/similar`);
-    }
-
     // =============================================
     // Методы для работы с заказами
     // =============================================
@@ -271,8 +251,17 @@ class ApiClient {
     }
 
     async getOrders(params = {}) {
-        const queryParams = new URLSearchParams(params);
-        return await this.request(`/orders?${queryParams.toString()}`);
+        const queryParams = new URLSearchParams();
+        Object.keys(params).forEach(key => {
+            if (params[key] !== null && params[key] !== undefined) {
+                queryParams.append(key, params[key]);
+            }
+        });
+        
+        const queryString = queryParams.toString();
+        const endpoint = queryString ? `/orders?${queryString}` : '/orders';
+        
+        return await this.request(endpoint);
     }
 
     async getOrder(orderId) {
@@ -313,16 +302,85 @@ class ApiClient {
 
         return await this.request('/admin/products', {
             method: 'POST',
-            headers: {
-                // Не устанавливаем Content-Type, чтобы браузер сам установил boundary для multipart/form-data
-            },
-            body: formData,
+            body: formData, // FormData не нужно stringify
         });
+    }
+
+    // =============================================
+    // Утилитарные методы
+    // =============================================
+
+    // Проверка состояния API
+    async healthCheck() {
+        try {
+            return await this.request('/health');
+        } catch (error) {
+            throw new Error('API недоступен');
+        }
+    }
+
+    // Получение изображения товара с fallback
+    getProductImageUrl(imageUrl) {
+        if (!imageUrl) {
+            return '/images/placeholder.jpg';
+        }
+        
+        // Если это полный URL, возвращаем как есть
+        if (imageUrl.startsWith('http')) {
+            return imageUrl;
+        }
+        
+        // Если это относительный путь, добавляем базовый URL
+        const hostname = window.location.hostname;
+        const port = window.location.port;
+        
+        // Для ручной разработки
+        if (port === '8080' || hostname !== 'localhost') {
+            return `http://localhost:3001${imageUrl}`;
+        }
+        
+        // Для Docker (через Nginx)
+        return imageUrl;
+    }
+
+    // Форматирование цены
+    formatPrice(price) {
+        return new Intl.NumberFormat('ru-RU', {
+            style: 'currency',
+            currency: 'RUB',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(price);
+    }
+
+    // Debounce для поиска
+    debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
     }
 }
 
 // Создаем экземпляр API клиента
 const apiClient = new ApiClient();
 
+// Проверяем доступность API при загрузке
+apiClient.healthCheck().then(() => {
+    console.log('✅ API connection established');
+}).catch((error) => {
+    console.error('❌ API connection failed:', error);
+});
+
 // Экспортируем для использования в других модулях
 window.MuStoreAPI = apiClient;
+
+// Также экспортируем через module.exports для совместимости
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = apiClient;
+}

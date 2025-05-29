@@ -40,17 +40,18 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: ${PORT:-3001}
+      PORT: 3001
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-mustore}
       DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-password}
-      JWT_SECRET: ${JWT_SECRET:-your-secret-key}
+      DB_PASSWORD: ${DB_PASSWORD:-your_secure_password}
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-this}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      CORS_ORIGIN: "*"
     volumes:
-      - ./uploads:/app/uploads
-      - ./logs:/app/logs
+      - ./backend/uploads:/app/uploads
+      - ./backend/logs:/app/logs
     ports:
       - "3001:3001"
     networks:
@@ -58,11 +59,12 @@ services:
     command: >
       sh -c "
         echo 'Waiting for database...' &&
-        sleep 10 &&
+        sleep 15 &&
+        echo 'Starting server...' &&
         node server.js
       "
 
-  # Nginx Web Server (для статических файлов frontend)
+  # Nginx Web Server
   nginx:
     image: nginx:alpine
     container_name: mustore-nginx
@@ -94,32 +96,14 @@ services:
       - mustore-network
     depends_on:
       - postgres
-
-  # Redis (опционально, для кэширования и сессий)
-  redis:
-    image: redis:7-alpine
-    container_name: mustore-redis
-    restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASSWORD:-redispassword}
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - mustore-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    profiles:
+      - admin # Запуск только при указании профиля: docker-compose --profile admin up
 
 # Volumes
 volumes:
   postgres_data:
     driver: local
   pgadmin_data:
-    driver: local
-  redis_data:
     driver: local
 
 # Networks

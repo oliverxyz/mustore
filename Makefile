@@ -122,7 +122,7 @@ status:
 	@pg_isready -h localhost -p 5432 || echo "PostgreSQL is not running"
 	@echo ""
 	@echo "Node.js API:"
-	@curl -s http://localhost:6000/api/health || echo "API is not running"
+	@curl -s http://localhost:3001/api/health || echo "API is not running"
 	@echo ""
 	@echo "Frontend:"
 	@curl -s http://localhost:80 || echo "Frontend is not running"
