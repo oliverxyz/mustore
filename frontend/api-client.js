@@ -244,28 +244,53 @@ class ApiClient {
     // =============================================
 
     async createOrder(orderData) {
-        return await this.request('/orders', {
-            method: 'POST',
-            body: JSON.stringify(orderData),
-        });
+        console.log('Creating order with data:', orderData);
+        try {
+            const response = await this.request('/orders', {
+                method: 'POST',
+                body: JSON.stringify(orderData),
+            });
+            console.log('Order created successfully:', response);
+            return response;
+        } catch (error) {
+            console.error('Create order error:', error);
+            throw error;
+        }
     }
 
     async getOrders(params = {}) {
-        const queryParams = new URLSearchParams();
-        Object.keys(params).forEach(key => {
-            if (params[key] !== null && params[key] !== undefined) {
-                queryParams.append(key, params[key]);
-            }
-        });
-        
-        const queryString = queryParams.toString();
-        const endpoint = queryString ? `/orders?${queryString}` : '/orders';
-        
-        return await this.request(endpoint);
+        console.log('Getting orders with params:', params);
+        try {
+            const queryParams = new URLSearchParams();
+            Object.keys(params).forEach(key => {
+                if (params[key] !== null && params[key] !== undefined) {
+                    queryParams.append(key, params[key]);
+                }
+            });
+            
+            const queryString = queryParams.toString();
+            const endpoint = queryString ? `/orders?${queryString}` : '/orders';
+            console.log('Orders API endpoint:', endpoint);
+            
+            const response = await this.request(endpoint);
+            console.log('Orders API response:', response);
+            return response;
+        } catch (error) {
+            console.error('Get orders error:', error);
+            throw error;
+        }
     }
 
     async getOrder(orderId) {
-        return await this.request(`/orders/${orderId}`);
+        console.log('Getting order:', orderId);
+        try {
+            const response = await this.request(`/orders/${orderId}`);
+            console.log('Order details:', response);
+            return response;
+        } catch (error) {
+            console.error('Get order error:', error);
+            throw error;
+        }
     }
 
     // =============================================
@@ -273,7 +298,38 @@ class ApiClient {
     // =============================================
 
     async getAdminStats() {
-        return await this.request('/admin/stats');
+        console.log('Getting admin stats');
+        try {
+            const response = await this.request('/admin/stats');
+            console.log('Admin stats:', response);
+            return response;
+        } catch (error) {
+            console.error('Get admin stats error:', error);
+            throw error;
+        }
+    }
+
+    async getAdminOrders(params = {}) {
+        console.log('Getting admin orders with params:', params);
+        try {
+            const queryParams = new URLSearchParams();
+            Object.keys(params).forEach(key => {
+                if (params[key] !== null && params[key] !== undefined) {
+                    queryParams.append(key, params[key]);
+                }
+            });
+            
+            const queryString = queryParams.toString();
+            const endpoint = queryString ? `/admin/orders?${queryString}` : '/admin/orders';
+            console.log('Admin orders API endpoint:', endpoint);
+            
+            const response = await this.request(endpoint);
+            console.log('Admin orders API response:', response);
+            return response;
+        } catch (error) {
+            console.error('Get admin orders error:', error);
+            throw error;
+        }
     }
 
     async updateOrder(orderId, data) {
@@ -281,6 +337,21 @@ class ApiClient {
             method: 'PUT',
             body: JSON.stringify(data),
         });
+    }
+
+    async updateOrderStatus(orderId, data) {
+        console.log('Updating order status:', orderId, data);
+        try {
+            const response = await this.request(`/admin/orders/${orderId}`, {
+                method: 'PUT',
+                body: JSON.stringify(data),
+            });
+            console.log('Order status updated:', response);
+            return response;
+        } catch (error) {
+            console.error('Update order status error:', error);
+            throw error;
+        }
     }
 
     async createProduct(productData) {

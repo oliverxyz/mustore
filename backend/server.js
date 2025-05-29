@@ -1054,6 +1054,417 @@ app.delete('/api/favorites/:productId', authenticateToken, async (req, res) => {
 });
 
 // =============================================
+// Orders Routes - добавить в server.js после Routes для избранного
+// =============================================
+
+// Создание заказа
+app.post('/api/orders', [
+    body('customerName').trim().isLength({ min: 2 }).withMessage('Имя должно быть минимум 2 символа'),
+    body('customerEmail').isEmail().withMessage('Неверный формат email').normalizeEmail(),
+    body('customerPhone').notEmpty().withMessage('Телефон обязателен'),
+    body('deliveryMethod').isIn(['pickup', 'delivery']).withMessage('Неверный способ доставки'),
+    body('paymentMethod').isIn(['cash', 'card', 'online']).withMessage('Неверный способ оплаты'),
+    handleValidationErrors
+], getOrCreateCart, async (req, res) => {
+    const client = await pool.connect();
+    
+    try {
+        await client.query('BEGIN');
+        
+        const {
+            customerName,
+            customerEmail,
+            customerPhone,
+            deliveryMethod = 'pickup',
+            deliveryAddress,
+            paymentMethod = 'cash',
+            notes
+        } = req.body;
+        
+        // Получаем корзину
+        const cartResult = await client.query(`
+            SELECT 
+                ci.quantity,
+                p.id as product_id,
+                p.name as product_name,
+                p.sku as product_sku,
+                p.price,
+                b.name as brand_name
+            FROM cart_items ci
+            JOIN products p ON ci.product_id = p.id
+            LEFT JOIN brands b ON p.brand_id = b.id
+            WHERE ci.cart_id = $1
+        `, [req.cartId]);
+        
+        if (cartResult.rows.length === 0) {
+            return res.status(400).json({ error: 'Корзина пуста' });
+        }
+        
+        const cartItems = cartResult.rows;
+        
+        // Проверяем наличие товаров на складе
+        for (const item of cartItems) {
+            const stockResult = await client.query(
+                'SELECT stock_quantity, reserved_quantity FROM products WHERE id = $1',
+                [item.product_id]
+            );
+            
+            const product = stockResult.rows[0];
+            const availableQuantity = product.stock_quantity - product.reserved_quantity;
+            
+            if (item.quantity > availableQuantity) {
+                throw new Error(`Недостаточно товара "${item.product_name}" на складе`);
+            }
+        }
+        
+        // Вычисляем суммы
+        const subtotal = cartItems.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
+        const deliveryAmount = deliveryMethod === 'delivery' ? 300 : 0;
+        const totalAmount = subtotal + deliveryAmount;
+        
+        // Генерируем номер заказа
+        const orderNumber = `ORD-${Date.now()}`;
+        
+        // Создаем заказ
+        const orderResult = await client.query(`
+            INSERT INTO orders (
+                order_number, user_id, status, payment_status,
+                subtotal, delivery_amount, total_amount,
+                customer_name, customer_email, customer_phone,
+                delivery_method, delivery_address, payment_method, notes
+            ) VALUES (
+                $1, $2, 'pending', 'pending',
+                $3, $4, $5,
+                $6, $7, $8,
+                $9, $10, $11, $12
+            ) RETURNING id, order_number, created_at
+        `, [
+            orderNumber,
+            req.user?.id || null,
+            subtotal,
+            deliveryAmount,
+            totalAmount,
+            customerName,
+            customerEmail,
+            customerPhone,
+            deliveryMethod,
+            deliveryAddress || null,
+            paymentMethod,
+            notes || null
+        ]);
+        
+        const order = orderResult.rows[0];
+        
+        // Добавляем позиции заказа
+        for (const item of cartItems) {
+            await client.query(`
+                INSERT INTO order_items (
+                    order_id, product_id, product_name, product_sku, product_brand,
+                    quantity, price, subtotal
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            `, [
+                order.id,
+                item.product_id,
+                item.product_name,
+                item.product_sku,
+                item.brand_name || '',
+                item.quantity,
+                item.price,
+                parseFloat(item.price) * item.quantity
+            ]);
+            
+            // Резервируем товар на складе
+            await client.query(
+                'UPDATE products SET reserved_quantity = reserved_quantity + $1 WHERE id = $2',
+                [item.quantity, item.product_id]
+            );
+        }
+        
+        // Очищаем корзину
+        await client.query('DELETE FROM cart_items WHERE cart_id = $1', [req.cartId]);
+        
+        await client.query('COMMIT');
+        
+        res.status(201).json({
+            order: {
+                id: order.id,
+                orderNumber: order.order_number,
+                createdAt: order.created_at,
+                status: 'pending',
+                paymentStatus: 'pending',
+                total: totalAmount,
+                customerName,
+                customerEmail
+            }
+        });
+        
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Create order error:', error);
+        res.status(500).json({ error: error.message || 'Ошибка при создании заказа' });
+    } finally {
+        client.release();
+    }
+});
+
+// Получение заказов пользователя
+app.get('/api/orders', authenticateToken, async (req, res) => {
+    try {
+        console.log('Getting orders for user:', req.user.id);
+        const { limit = 10, offset = 0 } = req.query;
+        
+        const result = await pool.query(`
+            SELECT 
+                o.id,
+                o.order_number,
+                o.status,
+                o.payment_status,
+                o.subtotal,
+                o.delivery_amount,
+                o.total_amount,
+                o.customer_name,
+                o.customer_email,
+                o.customer_phone,
+                o.delivery_method,
+                o.delivery_address,
+                o.payment_method,
+                o.created_at,
+                o.updated_at,
+                COALESCE(json_agg(
+                    json_build_object(
+                        'id', oi.id,
+                        'product_name', oi.product_name,
+                        'product_brand', oi.product_brand,
+                        'product_sku', oi.product_sku,
+                        'quantity', oi.quantity,
+                        'price', oi.price,
+                        'subtotal', oi.subtotal
+                    ) ORDER BY oi.created_at
+                ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+            FROM orders o
+            LEFT JOIN order_items oi ON o.id = oi.order_id
+            WHERE o.user_id = $1
+            GROUP BY o.id, o.order_number, o.status, o.payment_status, o.subtotal, o.delivery_amount, o.total_amount, o.customer_name, o.customer_email, o.customer_phone, o.delivery_method, o.delivery_address, o.payment_method, o.created_at, o.updated_at
+            ORDER BY o.created_at DESC
+            LIMIT $2 OFFSET $3
+        `, [req.user.id, limit, offset]);
+        
+        console.log('Found orders:', result.rows.length);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Get orders error:', error);
+        res.status(500).json({ error: 'Ошибка при получении заказов' });
+    }
+});
+
+// Получение конкретного заказа
+app.get('/api/orders/:orderId', authenticateToken, async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        
+        const result = await pool.query(`
+            SELECT 
+                o.*,
+                COALESCE(json_agg(
+                    json_build_object(
+                        'id', oi.id,
+                        'product_name', oi.product_name,
+                        'product_sku', oi.product_sku,
+                        'product_brand', oi.product_brand,
+                        'quantity', oi.quantity,
+                        'price', oi.price,
+                        'subtotal', oi.subtotal
+                    ) ORDER BY oi.created_at
+                ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+            FROM orders o
+            LEFT JOIN order_items oi ON o.id = oi.order_id
+            WHERE o.id = $1 AND (o.user_id = $2 OR $3 = 'admin')
+            GROUP BY o.id
+        `, [orderId, req.user.id, req.user.role]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Заказ не найден' });
+        }
+        
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Get order error:', error);
+        res.status(500).json({ error: 'Ошибка при получении заказа' });
+    }
+});
+
+// =============================================
+// Admin Orders Routes
+// =============================================
+
+// Получение всех заказов (только для админа)
+app.get('/api/admin/orders', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { 
+            status, 
+            limit = 20, 
+            offset = 0,
+            startDate,
+            endDate 
+        } = req.query;
+        
+        let query = `
+            SELECT 
+                o.*,
+                COALESCE(json_agg(
+                    json_build_object(
+                        'product_name', oi.product_name,
+                        'product_brand', oi.product_brand,
+                        'quantity', oi.quantity,
+                        'price', oi.price
+                    ) ORDER BY oi.created_at
+                ) FILTER (WHERE oi.id IS NOT NULL), '[]') as items,
+                COUNT(*) OVER() as total_count
+            FROM orders o
+            LEFT JOIN order_items oi ON o.id = oi.order_id
+            WHERE 1=1
+        `;
+        
+        const params = [];
+        let paramCount = 0;
+        
+        if (status) {
+            paramCount++;
+            query += ` AND o.status = $${paramCount}`;
+            params.push(status);
+        }
+        
+        if (startDate) {
+            paramCount++;
+            query += ` AND o.created_at >= $${paramCount}`;
+            params.push(startDate);
+        }
+        
+        if (endDate) {
+            paramCount++;
+            query += ` AND o.created_at <= $${paramCount}`;
+            params.push(endDate);
+        }
+        
+        query += ` GROUP BY o.id ORDER BY o.created_at DESC`;
+        
+        paramCount++;
+        query += ` LIMIT $${paramCount}`;
+        params.push(parseInt(limit));
+        
+        paramCount++;
+        query += ` OFFSET $${paramCount}`;
+        params.push(parseInt(offset));
+        
+        const result = await pool.query(query, params);
+        
+        const totalCount = result.rows.length > 0 ? result.rows[0].total_count : 0;
+        
+        res.json({
+            orders: result.rows,
+            pagination: {
+                total: parseInt(totalCount),
+                limit: parseInt(limit),
+                offset: parseInt(offset)
+            }
+        });
+    } catch (error) {
+        console.error('Get admin orders error:', error);
+        res.status(500).json({ error: 'Ошибка при получении заказов' });
+    }
+});
+
+// Обновление статуса заказа (только для админа)
+app.put('/api/admin/orders/:orderId', [
+    param('orderId').isUUID().withMessage('Неверный ID заказа'),
+    body('status').optional().isIn(['pending', 'processing', 'shipped', 'delivered', 'cancelled']).withMessage('Неверный статус заказа'),
+    body('paymentStatus').optional().isIn(['pending', 'paid', 'failed']).withMessage('Неверный статус оплаты'),
+    handleValidationErrors
+], authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const { status, paymentStatus, adminNotes } = req.body;
+        
+        const updates = [];
+        const params = [orderId];
+        let paramCount = 1;
+        
+        if (status) {
+            paramCount++;
+            updates.push(`status = $${paramCount}`);
+            params.push(status);
+        }
+        
+        if (paymentStatus) {
+            paramCount++;
+            updates.push(`payment_status = $${paramCount}`);
+            params.push(paymentStatus);
+        }
+        
+        if (adminNotes) {
+            paramCount++;
+            updates.push(`admin_notes = $${paramCount}`);
+            params.push(adminNotes);
+        }
+        
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'Нет данных для обновления' });
+        }
+        
+        paramCount++;
+        updates.push(`updated_at = $${paramCount}`);
+        params.push(new Date().toISOString());
+        
+        const query = `
+            UPDATE orders 
+            SET ${updates.join(', ')}
+            WHERE id = $1 
+            RETURNING *
+        `;
+        
+        const result = await pool.query(query, params);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Заказ не найден' });
+        }
+        
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Update order error:', error);
+        res.status(500).json({ error: 'Ошибка при обновлении заказа' });
+    }
+});
+
+// Получение статистики для админа
+app.get('/api/admin/stats', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const [ordersResult, usersResult, productsResult, salesResult] = await Promise.all([
+            pool.query('SELECT COUNT(*) as count FROM orders'),
+            pool.query('SELECT COUNT(*) as count FROM users WHERE role = $1', ['customer']),
+            pool.query('SELECT COUNT(*) as count FROM products WHERE is_available = true'),
+            pool.query(`
+                SELECT 
+                    COALESCE(SUM(total_amount), 0) as total_sales,
+                    COUNT(*) as completed_orders
+                FROM orders 
+                WHERE status = 'delivered' OR payment_status = 'paid'
+            `)
+        ]);
+        
+        res.json({
+            orders: parseInt(ordersResult.rows[0].count),
+            users: parseInt(usersResult.rows[0].count),
+            products: parseInt(productsResult.rows[0].count),
+            totalSales: parseFloat(salesResult.rows[0].total_sales),
+            completedOrders: parseInt(salesResult.rows[0].completed_orders)
+        });
+    } catch (error) {
+        console.error('Get admin stats error:', error);
+        res.status(500).json({ error: 'Ошибка при получении статистики' });
+    }
+});
+
+// =============================================
 // Error Handling
 // =============================================
 

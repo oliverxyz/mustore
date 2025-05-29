@@ -180,7 +180,9 @@
                         <span>Итого:</span>
                         <span id="cartTotalModal">0 ₽</span>
                     </div>
-                    <button class="btn btn-primary" style="width: 100%; margin-top: 20px;" onclick="App.Router.navigate('checkout')">
+                    <button class="btn btn-primary" 
+                            style="width: 100%; margin-top: 20px;" 
+                            onclick="App.closeModal('cartModal'); App.Router.navigate('checkout')">
                         Оформить заказ
                     </button>
                 </div>

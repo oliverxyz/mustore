@@ -1780,3 +1780,92 @@ footer {
         text-align: center;
     }
 }
+
+/* ========================================
+   Дополнительные стили для админ панели
+   ======================================== */
+.admin-section {
+    margin-top: 40px;
+}
+
+.admin-section h2 {
+    margin-bottom: 20px;
+    color: var(--primary-color);
+}
+
+.admin-table table th {
+    font-weight: 500;
+}
+
+.admin-table select {
+    padding: 5px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 12px;
+    background: white;
+}
+
+.admin-table small {
+    display: block;
+    margin-top: 2px;
+}
+
+/* ========================================
+   Обновленные стили статусов заказов
+   ======================================== */
+.status-badge.pending {
+    background: var(--warning-color);
+    color: white;
+}
+
+.status-badge.processing {
+    background: var(--secondary-color);
+    color: white;
+}
+
+.status-badge.shipped {
+    background: #2196F3;
+    color: white;
+}
+
+.status-badge.delivered {
+    background: var(--success-color);
+    color: white;
+}
+
+.status-badge.cancelled {
+    background: var(--error-color);
+    color: white;
+}
+
+/* ========================================
+   Карточки заказов - дополнительные стили
+   ======================================== */
+.order-card {
+    transition: var(--transition);
+}
+
+.order-card:hover {
+    transform: translateY(-2px);
+}
+
+.order-header strong {
+    color: var(--primary-color);
+    font-size: 16px;
+}
+
+.order-date {
+    font-weight: normal;
+}
+
+.order-items-preview {
+    line-height: 1.4;
+}
+
+.order-footer {
+    font-size: 14px;
+}
+
+.order-footer > div:first-child {
+    line-height: 1.4;
+}

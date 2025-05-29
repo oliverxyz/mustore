@@ -374,17 +374,32 @@ App.Cart = {
     },
 
     async clearCart() {
+        if (!confirm('Вы уверены, что хотите очистить корзину?')) {
+            return;
+        }
+        
         try {
+            App.UI.showLoader();
             await API.clearCart();
             await this.loadCart();
             App.UI.showNotification('Корзина очищена', 'success');
             
             // Если мы на странице корзины, обновляем её
-            if (window.location.hash === '#cart') {
-                this.showCart();
+            const currentHash = window.location.hash.slice(1) || 'home';
+            if (currentHash === 'cart') {
+                App.Pages.showCart();
+            }
+            
+            // Если модальное окно корзины открыто, обновляем его
+            const cartModal = document.getElementById('cartModal');
+            if (cartModal.style.display === 'flex') {
+                this.renderCart();
             }
         } catch (error) {
             App.UI.showNotification('Ошибка при очистке корзины', 'error');
+            console.error('Clear cart error:', error);
+        } finally {
+            App.UI.hideLoader();
         }
     },
 
@@ -498,7 +513,7 @@ App.Cart = {
             document.getElementById('cartItemsCount').textContent = this.getCount();
             document.getElementById('cartTotalModal').textContent = App.UI.formatPrice(this.getTotal());
         }
-    }
+    },
 };
 
 // ====================================
@@ -885,33 +900,70 @@ App.Pages = {
         document.getElementById('totalPrice').textContent = App.UI.formatPrice(total);
     },
 
+    getStatusText(status){
+            const statusTexts = {
+            'pending': 'В ожидании',
+            'processing': 'В обработке',
+            'shipped': 'Отправлен',
+            'delivered': 'Доставлен',
+            'cancelled': 'Отменен'
+        };
+        return statusTexts[status] || status;
+    },
+
+    getPaymentText(paymentMethod){
+        const paymentTexts = {
+            'cash': 'Наличные',
+            'card': 'Банковская карта',
+            'online': 'Онлайн оплата'
+        };
+        return paymentTexts[paymentMethod] || paymentMethod;
+    },
+
+    async updateOrderStatus(orderId, newStatus){
+        if (!newStatus) return;
+        
+        try {
+            App.UI.showLoader();
+            await API.updateOrderStatus(orderId, { status: newStatus });
+            
+            // Перезагружаем страницу админа
+            this.showAdmin();
+            App.UI.showNotification('Статус заказа обновлен', 'success');
+        } catch (error) {
+            App.UI.showNotification('Ошибка при обновлении статуса заказа', 'error');
+            console.error('Error updating order status:', error);
+        } finally {
+            App.UI.hideLoader();
+        }
+    },
+
     async submitOrder(cartData) {
         try {
             App.UI.showLoader();
             
-            const formData = new FormData(document.getElementById('orderForm'));
             const orderData = {
-                customerName: formData.get('customerName') || document.getElementById('customerName').value,
-                customerEmail: formData.get('customerEmail') || document.getElementById('customerEmail').value,
-                customerPhone: formData.get('customerPhone') || document.getElementById('customerPhone').value,
-                deliveryMethod: formData.get('deliveryMethod') || 'pickup',
-                deliveryAddress: formData.get('deliveryAddress') || document.getElementById('deliveryAddress').value,
-                paymentMethod: formData.get('paymentMethod') || 'cash',
-                notes: formData.get('notes') || document.getElementById('orderNotes').value
+                customerName: document.getElementById('customerName').value,
+                customerEmail: document.getElementById('customerEmail').value,
+                customerPhone: document.getElementById('customerPhone').value,
+                deliveryMethod: document.querySelector('input[name="deliveryMethod"]:checked').value,
+                deliveryAddress: document.getElementById('deliveryAddress').value || null,
+                paymentMethod: document.querySelector('input[name="paymentMethod"]:checked').value,
+                notes: document.getElementById('orderNotes').value || null
             };
 
-            // Создаем заказ (если API поддерживает)
-            // const order = await API.createOrder(orderData);
+            // Создаем заказ через API
+            const order = await API.createOrder(orderData);
             
-            // Очищаем корзину
-            await API.clearCart();
+            // Обновляем корзину
             await App.Cart.loadCart();
             
             // Показываем страницу успеха
             this.showOrderSuccess({
-                orderNumber: 'ORD-' + Date.now(),
+                orderNumber: order.order.orderNumber,
                 customerName: orderData.customerName,
-                customerEmail: orderData.customerEmail
+                customerEmail: orderData.customerEmail,
+                orderId: order.order.id
             });
             
         } catch (error) {
@@ -1080,12 +1132,15 @@ App.Pages = {
     },
 
     async showOrders() {
+        console.log('showOrders called');
+        
         App.UI.updateBreadcrumb([
             { text: 'Главная', link: 'home' },
             { text: 'Мои заказы', link: 'orders' }
         ]);
 
         if (!App.state.currentUser) {
+            console.log('No current user, showing login prompt');
             const content = document.getElementById('app-content');
             content.innerHTML = `
                 <div class="text-center">
@@ -1099,27 +1154,103 @@ App.Pages = {
             return;
         }
 
+        console.log('Current user:', App.state.currentUser);
         const content = document.getElementById('app-content');
         
         try {
             App.UI.showLoader();
+            console.log('Loading orders...');
             
-            // Заглушка для заказов (API метод может не быть реализован)
+            const orders = await API.getOrders();
+            console.log('Orders received:', orders);
+            
+            if (!orders || orders.length === 0) {
+                console.log('No orders found');
+                content.innerHTML = `
+                    <h1>Мои заказы</h1>
+                    <div class="text-center" style="margin-top: 60px;">
+                        <i class="fas fa-box" style="font-size: 64px; color: #ccc; margin-bottom: 30px;"></i>
+                        <p>У вас пока нет заказов</p>
+                        <p>Когда вы сделаете первый заказ, он появится здесь</p>
+                        <button class="btn btn-primary" onclick="App.Router.navigate('home')">
+                            Перейти к покупкам
+                        </button>
+                        
+                        <!-- Отладочная информация -->
+                        <div style="margin-top: 40px; padding: 20px; background: #f5f5f5; border-radius: 8px;">
+                            <h3>Отладочная информация:</h3>
+                            <p>Пользователь: ${App.state.currentUser.email}</p>
+                            <p>ID пользователя: ${App.state.currentUser.id}</p>
+                            <p>Токен есть: ${localStorage.getItem('authToken') ? 'Да' : 'Нет'}</p>
+                            <button class="btn btn-secondary" onclick="App.Pages.testOrdersAPI()">
+                                Тестировать API заказов
+                            </button>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            console.log('Rendering orders:', orders.length);
             content.innerHTML = `
                 <h1>Мои заказы</h1>
-                <div class="text-center" style="margin-top: 60px;">
-                    <i class="fas fa-box" style="font-size: 64px; color: #ccc; margin-bottom: 30px;"></i>
-                    <p>У вас пока нет заказов</p>
-                    <p>Когда вы сделаете первый заказ, он появится здесь</p>
-                    <button class="btn btn-primary" onclick="App.Router.navigate('home')">
-                        Перейти к покупкам
-                    </button>
+                <div class="orders-table">
+                    ${orders.map(order => {
+                        console.log('Rendering order:', order);
+                        return `
+                            <div class="order-card">
+                                <div class="order-header">
+                                    <div>
+                                        <strong>Заказ №${order.order_number}</strong>
+                                        <span class="order-date">${new Date(order.created_at).toLocaleDateString('ru-RU')}</span>
+                                    </div>
+                                    <span class="status-badge ${order.status}">
+                                        ${this.getStatusText(order.status)}
+                                    </span>
+                                </div>
+                                <div class="order-items-preview">
+                                    Товаров: ${order.items ? order.items.length : 0} | 
+                                    ${order.items && order.items.length > 0 ? 
+                                        order.items.slice(0, 2).map(item => item.product_name).join(', ') : 
+                                        'Нет товаров'
+                                    }
+                                    ${order.items && order.items.length > 2 ? '...' : ''}
+                                </div>
+                                <div class="order-footer">
+                                    <div>
+                                        <div>Способ получения: ${order.delivery_method === 'pickup' ? 'Самовывоз' : 'Доставка'}</div>
+                                        <div>Оплата: ${this.getPaymentText(order.payment_method)}</div>
+                                    </div>
+                                    <div class="order-total">${App.UI.formatPrice(order.total_amount)}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
                 </div>
             `;
             
         } catch (error) {
-            content.innerHTML = '<p class="text-center">Ошибка загрузки заказов</p>';
             console.error('Error loading orders:', error);
+            content.innerHTML = `
+                <div class="text-center">
+                    <h1>Мои заказы</h1>
+                    <p class="text-center">Ошибка загрузки заказов: ${error.message}</p>
+                    
+                    <!-- Отладочная информация -->
+                    <div style="margin-top: 40px; padding: 20px; background: #f5f5f5; border-radius: 8px;">
+                        <h3>Информация об ошибке:</h3>
+                        <p>Ошибка: ${error.message}</p>
+                        <p>Пользователь: ${App.state.currentUser?.email || 'Не определен'}</p>
+                        <p>Токен есть: ${localStorage.getItem('authToken') ? 'Да' : 'Нет'}</p>
+                        <button class="btn btn-secondary" onclick="App.Pages.testOrdersAPI()">
+                            Тестировать API заказов
+                        </button>
+                        <button class="btn btn-primary" onclick="App.Pages.showOrders()" style="margin-left: 10px;">
+                            Попробовать снова
+                        </button>
+                    </div>
+                </div>
+            `;
         } finally {
             App.UI.hideLoader();
         }
@@ -1261,6 +1392,12 @@ App.Pages = {
         try {
             App.UI.showLoader();
             
+            // Загружаем статистику и заказы
+            const [stats, ordersResponse] = await Promise.all([
+                API.getAdminStats(),
+                API.getAdminOrders({ limit: 10 })
+            ]);
+            
             content.innerHTML = `
                 <h1>Административная панель</h1>
                 
@@ -1268,30 +1405,73 @@ App.Pages = {
                     <div class="dashboard-card">
                         <i class="fas fa-box"></i>
                         <h3>Заказы</h3>
-                        <p>0</p>
+                        <p>${stats.orders}</p>
                     </div>
                     <div class="dashboard-card">
                         <i class="fas fa-users"></i>
                         <h3>Пользователи</h3>
-                        <p>2</p>
+                        <p>${stats.users}</p>
                     </div>
                     <div class="dashboard-card">
                         <i class="fas fa-music"></i>
                         <h3>Товары</h3>
-                        <p>12</p>
+                        <p>${stats.products}</p>
                     </div>
                     <div class="dashboard-card">
                         <i class="fas fa-chart-line"></i>
                         <h3>Продажи</h3>
-                        <p>0 ₽</p>
+                        <p>${App.UI.formatPrice(stats.totalSales)}</p>
                     </div>
                 </div>
 
-                <div class="text-center" style="margin-top: 40px;">
-                    <p>Административные функции находятся в разработке</p>
-                    <button class="btn btn-primary" onclick="App.Router.navigate('home')">
-                        Вернуться на главную
-                    </button>
+                <div class="admin-section">
+                    <h2>Последние заказы</h2>
+                    ${ordersResponse.orders && ordersResponse.orders.length > 0 ? `
+                        <div class="admin-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>№ заказа</th>
+                                        <th>Клиент</th>
+                                        <th>Дата</th>
+                                        <th>Сумма</th>
+                                        <th>Статус</th>
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${ordersResponse.orders.map(order => `
+                                        <tr>
+                                            <td>${order.order_number}</td>
+                                            <td>
+                                                ${order.customer_name}<br>
+                                                <small style="color: #666;">${order.customer_email}</small>
+                                            </td>
+                                            <td>${new Date(order.created_at).toLocaleDateString('ru-RU')}</td>
+                                            <td>${App.UI.formatPrice(order.total_amount)}</td>
+                                            <td>
+                                                <span class="status-badge ${order.status}">
+                                                    ${this.getStatusText(order.status)}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <select onchange="App.Pages.updateOrderStatus('${order.id}', this.value)" class="form-control" style="font-size: 12px;">
+                                                    <option value="">Изменить статус</option>
+                                                    <option value="pending" ${order.status === 'pending' ? 'selected' : ''}>В ожидании</option>
+                                                    <option value="processing" ${order.status === 'processing' ? 'selected' : ''}>В обработке</option>
+                                                    <option value="shipped" ${order.status === 'shipped' ? 'selected' : ''}>Отправлен</option>
+                                                    <option value="delivered" ${order.status === 'delivered' ? 'selected' : ''}>Доставлен</option>
+                                                    <option value="cancelled" ${order.status === 'cancelled' ? 'selected' : ''}>Отменен</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    ` : `
+                        <p class="text-center">Пока нет заказов</p>
+                    `}
                 </div>
             `;
             
