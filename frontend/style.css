@@ -1011,8 +1011,14 @@ nav {
 
 .filters-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     margin-top: 20px;
+}
+
+.filters-actions .btn {
+    flex: 1 1 120px;
+    min-width: 120px;
 }
 
 .active-filters {
